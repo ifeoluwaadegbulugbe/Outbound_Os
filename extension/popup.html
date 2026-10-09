@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 13px system-ui, sans-serif; width: 280px; margin: 0; padding: 14px; color: #1c1917; }
+    h1 { font-size: 14px; margin: 0 0 4px; }
+    p { margin: 4px 0; color: #57534e; }
+    button { width: 100%; margin-top: 8px; padding: 8px; border-radius: 8px; border: 1px solid #e7e5e2; background: #fff; font-weight: 600; cursor: pointer; }
+    button.primary { background: #e2496f; color: #fff; border-color: #e2496f; }
+    .usage { font-size: 12px; margin-top: 6px; }
+    .err { color: #c2261d; }
+  </style>
+</head>
+<body>
+  <h1>Outbound OS</h1>
+  <p id="status">Connecting…</p>
+  <div id="usage" class="usage"></div>
+  <button class="primary" id="start-ig">Start Instagram session</button>
+  <button id="start-tt">Start TikTok session</button>
+  <button id="start-wa">Start WhatsApp session</button>
+  <p style="font-size:11.5px;margin-top:10px">Opens your next approved message with the text typed in. You review and press Send — the extension never sends.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
