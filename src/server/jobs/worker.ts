@@ -95,7 +95,10 @@ export async function scheduleRecurring(driver?: Driver): Promise<void> {
   const day = new Date().toISOString().slice(0, 10);
   for (const w of workspaces) {
     await withWorkspace({ workspaceId: w.id }, async (q) => {
-      await ensureEmailDefaults(q, w.id);
+      // Defaults (locations, country rules, integrations) only need seeding once; skip the dozens of
+      // idempotent inserts when they're already there (this runs every minute on serverless).
+      const seeded = await q.value<boolean>(sql`select exists(select 1 from locations) and exists(select 1 from country_policies)`);
+      if (!seeded) await ensureEmailDefaults(q, w.id);
       await enqueue(q, { workspaceId: w.id, type: "followups.tick", dedupeKey: `followups.tick:${hour}`, maxAttempts: 2 });
       await enqueue(q, { workspaceId: w.id, type: "analytics.snapshot", dedupeKey: `analytics.snapshot:${day}`, maxAttempts: 2 });
       // Poll connected mailboxes for replies & bounces every ~10 minutes.
