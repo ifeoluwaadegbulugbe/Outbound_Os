@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Driver } from "@/server/db/driver";
 import { withWorkspace, withSystem, sql, textArray, json, and } from "@/server/db";
+import { enqueue } from "@/server/jobs/queue";
 import { testDb, createWorkspace } from "../helpers";
 
 let d: Driver;
@@ -30,6 +31,17 @@ describe("database layer", () => {
     expect(out.arr).toEqual(["a", 'b"c', "d,e"]);
     expect(out.obj).toEqual({ a: 1 });
     expect(out.ok).toBe(true);
+  });
+
+  it("runs a once-per-slot job only once, even after it finished", async () => {
+    const run = (once: boolean) => withWorkspace({ workspaceId: wsA }, (q) => enqueue(q, { workspaceId: wsA, type: "analytics.snapshot", dedupeKey: "slot-test:2026-10-10", once }), d);
+    const first = await run(true);
+    expect(first).toBeTruthy();
+    expect(await run(true)).toBeNull();
+    await withSystem((q) => q.exec(sql`update jobs set status = 'succeeded' where id = ${first}`), d);
+    expect(await run(true)).toBeNull();
+    // Without once, a finished job no longer blocks a new one.
+    expect(await run(false)).toBeTruthy();
   });
 
   it("enforces workspace isolation with row-level security", async () => {

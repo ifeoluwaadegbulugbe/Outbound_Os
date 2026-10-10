@@ -99,12 +99,12 @@ export async function scheduleRecurring(driver?: Driver): Promise<void> {
       // idempotent inserts when they're already there (this runs every minute on serverless).
       const seeded = await q.value<boolean>(sql`select exists(select 1 from locations) and exists(select 1 from country_policies)`);
       if (!seeded) await ensureEmailDefaults(q, w.id);
-      await enqueue(q, { workspaceId: w.id, type: "followups.tick", dedupeKey: `followups.tick:${hour}`, maxAttempts: 2 });
-      await enqueue(q, { workspaceId: w.id, type: "analytics.snapshot", dedupeKey: `analytics.snapshot:${day}`, maxAttempts: 2 });
+      await enqueue(q, { workspaceId: w.id, type: "followups.tick", dedupeKey: `followups.tick:${hour}`, once: true, maxAttempts: 2 });
+      await enqueue(q, { workspaceId: w.id, type: "analytics.snapshot", dedupeKey: `analytics.snapshot:${day}`, once: true, maxAttempts: 2 });
       // Poll connected mailboxes for replies & bounces every ~10 minutes.
       const slot = Math.floor(Date.now() / 600_000);
       const accounts = await q.many<{ id: string }>(sql`select id from sender_accounts where channel = 'email' and is_active and provider in ('gmail','microsoft') and status <> 'needs_reconnect'`);
-      for (const a of accounts) await enqueue(q, { workspaceId: w.id, type: "email.sync", payload: { accountId: a.id }, dedupeKey: `email.sync:${a.id}:${slot}`, maxAttempts: 1 });
+      for (const a of accounts) await enqueue(q, { workspaceId: w.id, type: "email.sync", payload: { accountId: a.id }, dedupeKey: `email.sync:${a.id}:${slot}`, once: true, maxAttempts: 1 });
     }, driver);
   }
 }

@@ -27,11 +27,17 @@ export interface EnqueueOptions {
   maxAttempts?: number;
   /** Prevents duplicate queued/running jobs with the same key. */
   dedupeKey?: string;
+  /** With dedupeKey: skip if a job with this key ever ran (time-slotted keys like `x:${hour}`). */
+  once?: boolean;
   total?: number | null;
   label?: string;
 }
 
 export async function enqueue(q: Q, o: EnqueueOptions): Promise<string | null> {
+  if (o.once && o.dedupeKey) {
+    const seen = await q.value<boolean>(sql`select exists(select 1 from jobs where workspace_id = ${o.workspaceId} and dedupe_key = ${o.dedupeKey})`);
+    if (seen) return null;
+  }
   const row = await q.maybe<{ id: string }>(sql`
     insert into jobs (workspace_id, type, payload, created_by, run_at, max_attempts, dedupe_key, progress_total, progress_label)
     values (${o.workspaceId}, ${o.type}, ${json(o.payload ?? {})}, ${o.createdBy ?? null}, ${o.runAt ?? new Date()}, ${o.maxAttempts ?? 3},

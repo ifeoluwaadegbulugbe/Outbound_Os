@@ -96,9 +96,11 @@ export function uuidArray(items: readonly string[]): SqlFragment {
   return sql`${pgArrayLiteral(items)}::uuid[]`;
 }
 
+// Sent as text, then cast: a parameter typed jsonb makes postgres.js JSON.stringify
+// the already-serialized string again, storing a JSON string instead of an object.
 export function json(value: unknown): SqlFragment {
   if (value === undefined) return sql`null::jsonb`;
-  return sql`${JSON.stringify(value)}::jsonb`;
+  return sql`${JSON.stringify(value)}::text::jsonb`;
 }
 
 /** Bulk VALUES list: values([[a,b],[c,d]]) -> ($1,$2),($3,$4) */

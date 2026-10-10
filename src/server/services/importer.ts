@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import { sql } from "../db";
+import { sql, json } from "../db";
 import type { JobContext } from "../jobs/worker";
 import type { NormalizedProspect } from "../adapters/types";
 import { ingestMany, prepare, type IngestOutcome } from "./ingest";
@@ -189,7 +189,7 @@ export async function runImport(ctx: JobContext) {
     await ctx.ws((q) => q.exec(sql`update import_batches set created = ${counts.created + counts.flagged}, merged = ${counts.merged}, duplicates_flagged = ${counts.flagged}, skipped = ${counts.skipped + counts.suppressed} where id = ${p.importId}`));
   }
   await ctx.ws(async (q) => {
-    await q.exec(sql`update import_batches set status = 'succeeded', errors = ${JSON.stringify(errors)}::jsonb where id = ${p.importId}`);
+    await q.exec(sql`update import_batches set status = 'succeeded', errors = ${json(errors)} where id = ${p.importId}`);
     await notify(q, ctx.workspaceId, { userId: ctx.userId, type: "import_done", title: `Import finished: ${counts.created + counts.flagged} new prospects`, body: `${counts.merged} matched existing · ${counts.flagged} possible duplicates · ${counts.skipped + counts.suppressed} skipped`, link: "/prospects?sort=discovered" });
   });
   // The raw CSV is no longer needed once imported (data minimisation).

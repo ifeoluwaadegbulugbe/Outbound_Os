@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { json, toQuery } from "@/server/db/sql";
 import { extractSignals, normalizeName, normalizePhone, socialFromUrl, coreName } from "@/server/domain/normalize";
 import { scoreIcp, scoreCompleteness, scorePriority, DEFAULT_ICP, type ScorableProspect } from "@/server/domain/scoring";
 import { compareProspects, nameSimilarity, type DedupRecord } from "@/server/domain/dedup";
@@ -253,5 +254,13 @@ describe("natural-language filters", () => {
     expect(r.unparsed).toEqual([]);
     const n = parseNaturalLanguage("hair stylists excluding barbers not in Abuja");
     expect(describeFilter(n.filter)).toContain("NOT City = Abuja");
+  });
+});
+
+describe("sql json()", () => {
+  it("sends JSON as text so postgres.js does not encode it twice", () => {
+    const q = toQuery(json({ ok: true }));
+    expect(q.text).toBe("$1::text::jsonb");
+    expect(q.values).toEqual(['{"ok":true}']);
   });
 });
