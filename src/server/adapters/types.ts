@@ -27,6 +27,12 @@ export interface NormalizedProspect {
   linkedin_url?: string | null;
   youtube_url?: string | null;
   email?: string | null;
+  /** Further publicly listed emails for the same business (stored as contacts with provenance). */
+  extra_emails?: string[];
+  /** Public business address (freeform). */
+  address?: string | null;
+  /** True when business_name was derived from a domain and should be replaced by the site's own name when crawled. */
+  name_from_domain?: boolean;
   phone?: string | null;
   whatsapp?: string | null;
   website?: string | null;

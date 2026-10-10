@@ -21,6 +21,22 @@ export interface FinderResult {
   blockedByRobots: string[];
   error: string | null;
   bookingUrl: string | null;
+  /** The site's own name (og:site_name or <title>), from the first page read. */
+  siteName: string | null;
+}
+
+/** Business name from a page's og:site_name or title, minus "Home | " style noise. */
+export function siteNameFrom(html: string): string | null {
+  const og = /<meta[^>]+property=["']og:site_name["'][^>]*content=["']([^"']{2,120})["']/i.exec(html) ?? /<meta[^>]+content=["']([^"']{2,120})["'][^>]*property=["']og:site_name["']/i.exec(html);
+  const title = /<title[^>]*>([^<]{2,200})<\/title>/i.exec(html);
+  let name = (og?.[1] ?? title?.[1] ?? "").replace(/&amp;/g, "&").replace(/&#0?39;|&apos;/g, "'").replace(/&[a-z]+;|&#\d+;/gi, " ").trim();
+  if (!og) {
+    const parts = name.split(/\s+[|–—\-:·•]\s+/).map((x) => x.trim()).filter(Boolean);
+    const generic = /^(home|homepage|welcome|index|official site|official website|contact( us)?|about( us)?)$/i;
+    name = parts.find((x) => !generic.test(x)) ?? "";
+  }
+  name = name.replace(/\s+/g, " ").trim();
+  return name.length >= 2 && name.length <= 100 && !/^(home|index|untitled|wordpress|just another wordpress site)$/i.test(name) ? name : null;
 }
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
@@ -108,7 +124,7 @@ function findBookingLink(html: string, base: URL): string | null {
 }
 
 export async function findEmailsOnWebsite(website: string, fetcher: Fetcher = fetch): Promise<FinderResult> {
-  const result: FinderResult = { emails: [], pagesFetched: [], blockedByRobots: [], error: null, bookingUrl: null };
+  const result: FinderResult = { emails: [], pagesFetched: [], blockedByRobots: [], error: null, bookingUrl: null, siteName: null };
   let start: URL;
   try {
     start = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
@@ -147,6 +163,7 @@ export async function findEmailsOnWebsite(website: string, fetcher: Fetcher = fe
       for (const f of extractEmails(page.text)) if (!found.has(f.email)) found.set(f.email, { sourceUrl: page.finalUrl, how: f.how });
       const base = new URL(page.finalUrl);
       result.bookingUrl ??= findBookingLink(page.text, base);
+      if (result.pagesFetched.length === 1) result.siteName = siteNameFrom(page.text);
       if (result.pagesFetched.length === 1) for (const l of candidateLinks(page.text, base).slice(0, MAX_PAGES - 1)) queue.push(l);
       await new Promise((r) => setTimeout(r, 400)); // be gentle
     } catch (e) {

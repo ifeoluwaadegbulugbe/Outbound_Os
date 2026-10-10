@@ -25,6 +25,7 @@ Everything runs locally on an embedded Postgres (PGlite) in `~/.outbound-os/` (o
 |---|---|
 | **Email** | Send from your own Gmail/Outlook via OAuth (no passwords stored), composer with edit/regenerate/test/send, paced send queue with per-account caps, warm-up, send windows, automatic safety pause on bounces/complaints, reply/bounce/out-of-office detection, one-click unsubscribe, country compliance rules |
 | **Find emails** | Public emails from business websites (robots.txt respected, source URL recorded), DNS verification, optional ZeroBounce. Never guessed |
+| **Collection engine** | Multi-source, resumable collection toward 100k African service businesses: Overture Maps Places (open data incl. public business emails), OpenStreetMap country-wide, Common Crawl website discovery, a persistent website-crawl queue and DNS email checks. Live dashboard at Collection Progress; `npm run collect` for unattended runs |
 | **Discover** | Resumable (pause/resume/cancel, checkpointed) OpenStreetMap discovery across African cities and custom categories, Instagram (official Graph API: hashtags → mentions → Business Discovery), OpenStreetMap, CSV/Foursquare open data, one-click capture while browsing |
 | **Qualify** | Deduplication (merge only on exact identity; fuzzy matches go to review), transparent 0–100 ICP score with a reason for every point, priority, data completeness |
 | **Research** | AI brief grounded in cited facts; inferences labelled; unknowns listed |
@@ -56,4 +57,5 @@ No scraping, no stealth automation, no fake accounts, no automatic sending on pl
 | `npm run db:migrate` | Apply migrations (production) |
 | `npm run db:seed` | Dev owner + demo data (refuses in production) |
 | `npm run db:reset` | Delete the embedded dev database |
+| `npm run collect` | Long-running collector (`--countries NG,GH --minutes 120`, `--status`). Resumes where it stopped |
 | `npm run worker` | Standalone job worker (production with `DATABASE_URL`) |

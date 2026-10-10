@@ -60,7 +60,7 @@ async function createPostgresDriver(url: string): Promise<Driver> {
   });
   const wrap = (q: { unsafe: (t: string, v?: unknown[]) => Promise<unknown> }): Queryable => ({
     async query<T>(text: string, values: unknown[] = []) {
-      return (await q.unsafe(text, values as never[])) as unknown as T[];
+      return timed(text, async () => (await q.unsafe(text, values as never[])) as unknown as T[]);
     },
   });
   const base = wrap(sql as never);
@@ -114,6 +114,19 @@ function acquireLock(dir: string) {
   process.once("exit", release);
 }
 
+/** Slow-query log: set SLOW_QUERY_MS (e.g. 3000) to print any statement slower than that. */
+const SLOW_MS = Number(process.env.SLOW_QUERY_MS ?? 0);
+async function timed<T>(text: string, fn: () => Promise<T>): Promise<T> {
+  if (!SLOW_MS) return fn();
+  const t = Date.now();
+  try {
+    return await fn();
+  } finally {
+    const ms = Date.now() - t;
+    if (ms >= SLOW_MS) console.warn(`[db] slow query ${ms} ms: ${text.replace(/\s+/g, " ").slice(0, 300)}`);
+  }
+}
+
 async function createPgliteDriver(dir: string): Promise<Driver> {
   const { PGlite } = await import("@electric-sql/pglite");
   const { pg_trgm } = await import("@electric-sql/pglite/contrib/pg_trgm");
@@ -133,8 +146,7 @@ async function createPgliteDriver(dir: string): Promise<Driver> {
   };
   const wrap = (q: { query: (t: string, v?: unknown[], o?: object) => Promise<{ rows: unknown[] }> }): Queryable => ({
     async query<T>(text: string, values: unknown[] = []) {
-      const r = await q.query(text, values, { parsers });
-      return r.rows as T[];
+      return timed(text, async () => (await q.query(text, values, { parsers })).rows as T[]);
     },
   });
   const base = wrap(db as never);

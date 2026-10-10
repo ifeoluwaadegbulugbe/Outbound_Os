@@ -1,33 +1,64 @@
-# Data sources: what's integrated, what it costs, what it can realistically reach
+# Data sources and the collection engine
 
-The goal is 100,000+ African service businesses with email (Nigeria first). This page states what is actually integrated and tested today, and what would be needed to get there. **No claim of 100k reachable emails is made until sources that can deliver them are integrated and tested.**
+Goal: 100,000 unique African service businesses (Nigeria first), with as many publicly listed business emails as possible, using free sources that permit this use. Live, measured progress is on **Collection Progress** (`/collection`) and `npm run collect -- --status`. This page explains the sources; it does not claim results.
 
-## Integrated and working
+## Why the first version found so little
 
-| Source | What it gives | Cost | Limits | Email coverage |
+The original pipeline searched **one source (OpenStreetMap) in city bounding boxes**, with a handful of category tags. OpenStreetMap maps relatively few small service businesses in African cities, and rarely their emails. One Lagos run gave 16 businesses and 2 emails. That measured OpenStreetMap's coverage, not the market. Your manual searches found more because Google Maps and web search draw on business listings (largely Facebook business pages and Google Business Profiles) that OpenStreetMap doesn't have.
+
+Overture Maps Places publishes exactly that kind of listing data (contributed by Meta, Microsoft and others) as an open dataset. It is now the primary source.
+
+## Sources
+
+| Source | What it provides | Licence / permission | How it's queried | Limits |
 |---|---|---|---|---|
-| **OpenStreetMap (Overpass)** | Mapped businesses by category × city across the built-in African locations and any city you add, with name, address, phone, website, sometimes email/Instagram | Free (ODbL, attribution required) | Public endpoint: low volume, one request at a time (the adapter waits 5s between queries). Heavy use: self-host Overpass or use a paid instance via `OVERPASS_URL` | Low. In a real Lagos test run, 2 of 16 businesses had an email in OSM and 1 had a website. Coverage varies a lot by city |
-| **Website email finder** | Public emails on a business's own site (homepage + up to 4 contact/about/booking pages), each stored with source URL and timestamp | Free | Respects robots.txt, 5 pages max, 1.5 MB/page, 400 ms between pages, blocks private IPs, skips social/directory hosts | Only for businesses that have a website and publish an address |
-| **CSV / list import** | Your own lists or open datasets (e.g. Foursquare Open Places) with column mapping, dedup and scoring | Free | 50k rows per import | Whatever the list contains. Only import data you have the right to use |
-| **Quick capture + bookmarklet** | Profiles you find while browsing | Free | Manual | Manual |
-| **Instagram Graph API** | Hashtag → mentions → Business Discovery profiles (bio, website, sometimes public email) | Free | 30 unique hashtags / 7 days; rate-limited by Meta (the app paces at 180 calls/hour by default); needs a Meta app + Instagram professional account | Partial (public business email on some profiles) |
-| **DNS verification** | Syntax, disposable domain and MX check | Free | DNS must be reachable from the server | n/a (max status: deliverability unknown) |
-| **ZeroBounce** | Mailbox-level verification | 100 free/month (business-domain signup), then pay-as-you-go | API key required | n/a |
+| **Overture Maps Places** (primary) | Name, category, address, phone, website, social links and, for many listings, a public business email. Contributed largely from public Facebook business pages (Meta) and Microsoft | CDLA Permissive 2.0 (free, commercial use and storage allowed, with attribution) | DuckDB reads the public GeoParquet on S3 per 2° tile per country; only overlapping row groups are downloaded. Releases auto-detected (`OVERTURE_RELEASE` to pin) | Network bandwidth; tens of seconds per tile |
+| **OpenStreetMap, country-wide** | Tagged businesses per category over the whole national boundary, plus a whole-word name-pattern pass ("… Barbing Salon") over shops/crafts/offices that lack the category tag | ODbL (attribution) | Overpass `area["ISO3166-1"=…]` queries, ≥15 s apart, fallback mirror (`OVERPASS_URL` takes a comma-separated list) | Public Overpass fair use; large countries can time out (retried with backoff, then dead-lettered and shown) |
+| **Common Crawl URL index** | Business websites on national domains (`*.com.ng`, `*.co.ke`, `*.co.za`, …) whose hostname contains a service word ("salon", "barber", "catering"…). Emails come from the website crawler | Common Crawl terms of use (open index) | One unit per index page (e.g. 47 pages for `*.com.ng`) | Only businesses with a website on the national domain |
+| **Website crawler** (enrichment) | Public emails on each business's own site (homepage + up to 4 contact/about/booking pages): `mailto:`, text, "[at]" obfuscation, Cloudflare-protected addresses; booking links; the site's real name | Respects robots.txt; public pages only | Persistent queue, 6–8 sites in parallel, 400 ms between pages per site, 12 s timeouts, retry ×3 with backoff | Sites that block robots or don't publish an email |
+| **DNS email check** | Syntax, disposable domains, MX records | Free | Batched; domain results cached | Can't confirm a mailbox exists → "deliverability unknown" |
+| CSV import / Quick capture | Lists you have rights to, Google Maps finds you collect by hand, the bookmarklet | Your data | Discover → Import CSV / Quick capture | Manual |
+| Instagram Graph API | Business Discovery profiles | Meta platform terms | Discover → Instagram | 30 hashtags/week |
+| ZeroBounce (optional) | Mailbox-level verification | Paid after 100 free/month | On demand only, never in bulk automatically | Credits |
 
-Per-source counts (businesses, with website, with email, verified, countries) are shown live under **Discover Businesses → Runs → What each source has contributed**.
+## Not automated, and why
 
-## Realistic reach today
+| Source | Reason | Alternative in the app |
+|---|---|---|
+| Google Maps / Places API | Places API terms prohibit storing Places content (beyond place IDs) and building lead lists; scraping Maps violates Google's terms | Manual research queries on Collection Progress (they open in Maps), then Quick capture or CSV import |
+| Google / Bing / DuckDuckGo results pages | Their terms prohibit automated querying; the Bing Search API was retired; Google's Custom Search JSON API is closed to new customers | Same manual query list; Common Crawl covers websites in bulk |
+| Brave Search API free tier | The free plan doesn't include rights to store results | Can be added as an adapter on a plan with storage rights |
+| Foursquare Open Source Places | Its public S3 bucket is now empty; access moved behind Foursquare's portal | Add later via its official download after registering |
+| Paid directories / data vendors | Cost, and their terms usually forbid extraction | CSV import of licensed lists |
+| Facebook / Instagram / TikTok pages directly | Platform terms prohibit scraping | Overture already includes Meta's open contribution of business-page data |
 
-The only measured result so far is one Lagos OpenStreetMap run: 16 businesses, 2 with an email (13%), 1 with a website. OpenStreetMap coverage of small service businesses in African cities is thin, so free sources alone will reach far fewer than 100,000 businesses with email. Run discovery across your target cities and read the real totals from the contribution table before planning volume.
+## Email status categories
 
-## What would be needed for 100k+ (not integrated, mostly paid)
+Shown on Collection Progress, one row per business:
 
-| Option | Notes |
+| Category | Meaning |
 |---|---|
-| **Licensed business directories / data vendors** (e.g. local directories such as VConnect or BusinessList.com.ng under a data licence, Africa-focused B2B data vendors) | Paid; requires a licence that permits outreach use. Import via CSV, or add an adapter |
-| **Foursquare Places API / Open Places** | Open Places dataset is free (Apache 2.0) but has few emails; the API is paid beyond the free tier. Combine with the website finder |
-| **Self-hosted Overpass** | Removes public-endpoint throttling; still limited by OSM coverage |
-| **Google Places API** | Not used: Google's terms prohibit building lead lists or caching Places data |
-| **Email finder services** (Hunter, Apollo, etc.) | Free tiers are small (Hunter: roughly 50–100 lookups/month); pattern-guessed addresses must not be marked verified |
+| Publicly found | Taken from the business's own public listing or website; the source URL is stored |
+| Syntax-valid | Well-formed and not marked invalid |
+| Domain has MX | The domain has mail servers (free DNS check) |
+| Deliverability unknown | Passed the free checks; the mailbox itself isn't confirmed |
+| Catch-all or uncertain | Verification provider couldn't confirm it, or flagged it risky |
+| Verified | Mailbox confirmed by a verification provider (never from DNS alone) |
+| Invalid / bounced | Bad domain, no mail server, or bounced |
+| Needs review | The same address is listed for several businesses (a shared agency or mall inbox); check before emailing |
+| Suppressed | Opted out or on do-not-contact |
+| No public email found | No email in the listing, and the website (if any) had none |
 
-New sources plug in as adapters (`src/server/adapters/*`, the `SourceAdapter` interface) or through CSV import. Discovery is resumable: each city × category unit is checkpointed, so a 100k-scale run can be paused, resumed or cancelled without duplicates.
+No address is ever guessed (no `info@domain` patterns), and no probe or test emails are sent.
+
+## Deduplication and counting
+
+- Each source record keeps its source, external id and URL (`prospect_sources`), so one business found by Overture, OpenStreetMap and Common Crawl is **one** business with three provenance rows.
+- Automatic merges happen only on exact identity (same social handle, same source URL, or same phone/email plus a similar name). Shared contact details with unrelated names are flagged for review, never merged.
+- Business counts exclude demo data and merged duplicates. Email counts are separate: a business with three emails counts once as a business and three times as an email address.
+
+## Running it
+
+- **In the app:** Collection Progress → choose countries and sources → **Start collection**. The background worker runs discovery, crawling and email checks continuously. Pause, resume, stop, and **Retry failed work** are on the same page.
+- **Unattended / long runs:** `npm run collect -- --minutes 240 --countries NG,GH,KE` (Ctrl+C stops after the current step; rerun to resume). `npm run collect -- --status` prints progress. With the embedded database, stop `npm run dev` first (only one process can hold it); with `DATABASE_URL` both can run.
+- **Auto-expand:** when every planned unit is done and the target isn't reached, the next country in the list (Nigeria → Ghana → Kenya → South Africa → Uganda → Tanzania → Rwanda → …) is planned automatically.

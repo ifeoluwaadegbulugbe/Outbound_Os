@@ -81,6 +81,8 @@ export function prepare(n: NormalizedProspect): Prepared {
     state: n.state ?? cityInfo?.state ?? null,
     city,
     area: n.area ?? null,
+    address: n.address?.slice(0, 300) ?? null,
+    name_from_domain: Boolean(n.name_from_domain),
     timezone: cityInfo || (n.country ?? "").toUpperCase() === "NG" ? "Africa/Lagos" : null,
     lat: n.lat ?? null,
     lng: n.lng ?? null,
@@ -126,7 +128,7 @@ const INSERT_COLUMNS = [
   "instagram_url", "tiktok_handle", "tiktok_url", "facebook_url", "linkedin_url", "youtube_url", "email", "phone", "whatsapp",
   "website", "website_domain", "booking_url", "has_booking_link", "has_website", "accepts_bookings", "accepts_whatsapp_bookings",
   "accepts_online_payments", "has_client_management_system", "follower_count", "last_post_date", "posting_frequency",
-  "activity_score", "signals", "source", "source_url", "is_demo",
+  "activity_score", "signals", "source", "source_url", "is_demo", "address", "name_from_domain",
 ] as const;
 
 function valueFrag(col: string, v: unknown) {
@@ -146,22 +148,31 @@ async function isSuppressed(q: Q, d: DedupRecord): Promise<string | null> {
   return hit ? `On do-not-contact list (${hit.kind}, ${hit.reason.replace("_", " ")})` : null;
 }
 
+/**
+ * Candidate duplicates. Each branch is its own indexed lookup (UNION) so this
+ * stays fast at 100k+ prospects. Emails and handles are stored lower-case, so
+ * plain equality is used (index-usable under row-level security); similar
+ * names come from prospect_name_candidates() (migration 004).
+ */
 async function findCandidates(q: Q, d: DedupRecord): Promise<(DedupRecord & { id: string })[]> {
-  const conds = [
-    d.instagram_handle && sql`lower(instagram_handle) = ${d.instagram_handle}`,
-    d.tiktok_handle && sql`lower(tiktok_handle) = ${d.tiktok_handle}`,
-    d.phone && sql`(phone = ${d.phone} or whatsapp = ${d.phone})`,
-    d.whatsapp && sql`(phone = ${d.whatsapp} or whatsapp = ${d.whatsapp})`,
-    d.email && sql`lower(email) = ${d.email}`,
-    d.website_domain && sql`website_domain = ${d.website_domain}`,
-    d.source_url && sql`source_url = ${d.source_url}`,
-    sql`similarity(normalized_name, ${normalizeName(d.business_name)}) > 0.45`,
-  ];
-  return q.many(sql`
-    select id, business_name, city, instagram_handle, tiktok_handle, phone, whatsapp, email, website_domain, owner_name, source_url
-    from prospects
-    where merged_into is null and ${or(conds)}
-    limit 25`);
+  const cols = sql`id, business_name, city, instagram_handle, tiktok_handle, phone, whatsapp, email, website_domain, owner_name, source_url`;
+  const name = normalizeName(d.business_name);
+  const live = sql`merged_into is null`;
+  const branches = [
+    d.instagram_handle ? sql`select ${cols} from prospects where ${live} and instagram_handle = ${d.instagram_handle}` : null,
+    d.tiktok_handle ? sql`select ${cols} from prospects where ${live} and tiktok_handle = ${d.tiktok_handle}` : null,
+    d.phone ? sql`select ${cols} from prospects where ${live} and phone = ${d.phone}` : null,
+    d.phone ? sql`select ${cols} from prospects where ${live} and whatsapp = ${d.phone}` : null,
+    d.whatsapp && d.whatsapp !== d.phone ? sql`select ${cols} from prospects where ${live} and (phone = ${d.whatsapp} or whatsapp = ${d.whatsapp})` : null,
+    d.email ? sql`select ${cols} from prospects where ${live} and email = ${d.email}` : null,
+    d.website_domain ? sql`select ${cols} from prospects where ${live} and website_domain = ${d.website_domain}` : null,
+    d.source_url ? sql`select ${cols} from prospects where ${live} and source_url = ${d.source_url}` : null,
+    name ? sql`select ${cols} from prospects where id in (select prospect_name_candidates(${name}))` : null,
+  ].filter((b): b is NonNullable<typeof b> => b !== null);
+  if (!branches.length) return [];
+  let u = branches[0];
+  for (const b of branches.slice(1)) u = sql`${u} union ${b}`;
+  return q.many(sql`select * from (${u}) c limit 25`);
 }
 
 /** Fill-only merge: never overwrite known values, except fresher activity data. */
@@ -189,7 +200,9 @@ export async function ingestProspect(q: Q, ctx: ActorCtx, n: NormalizedProspect,
 
   // Same record from the same source again → refresh it.
   if (n.external_id) {
-    const existing = await q.maybe<{ prospect_id: string }>(sql`select prospect_id from prospect_sources where source = ${n.source} and external_id = ${n.external_id}`);
+    // Passes over the same dataset (overture, overture_ext, overture_orbit…) share record ids: a hit from any of them is a refresh.
+    const family = n.source.split("_")[0];
+    const existing = await q.maybe<{ prospect_id: string }>(sql`select prospect_id from prospect_sources where (source = ${n.source} or split_part(source, '_', 1) = ${family}) and external_id = ${n.external_id} limit 1`);
     if (existing) {
       const live = await q.value<string>(sql`select coalesce(merged_into, id) from prospects where id = ${existing.prospect_id}`);
       await mergeInto(q, live, prep.row);
@@ -210,6 +223,7 @@ export async function ingestProspect(q: Q, ctx: ActorCtx, n: NormalizedProspect,
     await mergeInto(q, best.c.id, prep.row);
     await addSource(q, ctx.workspaceId, best.c.id, n);
     if (prep.row.email) await recordSourceEmail(q, ctx.workspaceId, best.c.id, prep.row.email as string, n.source, n.source_url ?? null);
+    for (const e of n.extra_emails ?? []) await recordExtraEmail(q, ctx.workspaceId, best.c.id, e, n);
     if (!opts.skipScoring) await rescoreProspect(q, best.c.id, opts.icp);
     if (opts.campaignId) await addToCampaign(q, ctx.workspaceId, opts.campaignId, [best.c.id]);
     await logEvent(q, ctx, { type: "prospect.merged", prospectId: best.c.id, data: { source: n.source, reasons: best.m.reasons } });
@@ -224,6 +238,7 @@ export async function ingestProspect(q: Q, ctx: ActorCtx, n: NormalizedProspect,
     returning id`);
   await addSource(q, ctx.workspaceId, id, n);
   if (prep.row.email) await recordSourceEmail(q, ctx.workspaceId, id, prep.row.email as string, n.source, n.source_url ?? null);
+  for (const e of n.extra_emails ?? []) await recordExtraEmail(q, ctx.workspaceId, id, e, n);
 
   const flagged = matches.filter((x) => x.m.decision === "flag");
   for (const f of flagged) {
@@ -240,6 +255,12 @@ export async function ingestProspect(q: Q, ctx: ActorCtx, n: NormalizedProspect,
   return flagged.length
     ? { outcome: "flagged", prospectId: id, duplicateOf: flagged.map((f) => ({ id: f.c.id, confidence: f.m.confidence })) }
     : { outcome: "created", prospectId: id };
+}
+
+async function recordExtraEmail(q: Q, workspaceId: string, prospectId: string, raw: string, n: NormalizedProspect): Promise<void> {
+  const e = normalizeEmail(raw);
+  if (!e) return;
+  await recordSourceEmail(q, workspaceId, prospectId, e, n.source, n.source_url ?? null);
 }
 
 async function addSource(q: Q, workspaceId: string, prospectId: string, n: NormalizedProspect): Promise<void> {
@@ -287,6 +308,9 @@ export async function ingestMany(q: Q, ctx: ActorCtx, items: NormalizedProspect[
     const r = await ingestProspect(q, ctx, n, { ...opts, icp });
     counts[r.outcome]++;
     results.push(r);
+    // The embedded database resolves queries on the microtask queue; yield to timers and I/O between
+    // records so a large batch never starves the rest of the process.
+    await new Promise((resolve) => setImmediate(resolve));
   }
   return { counts, results };
 }

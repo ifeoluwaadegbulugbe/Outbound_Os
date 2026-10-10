@@ -21,14 +21,14 @@ const DEFAULT_VERSION = process.env.IG_GRAPH_VERSION ?? "v23.0";
 const MAX_HASHTAGS_PER_WEEK = 30;
 const MAX_DEPTH = 2;
 
-interface IgConfig {
+export interface IgConfig {
   igUserId: string;
   token: string;
   version: string;
   callsPerHour: number;
 }
 
-async function loadConfig(ctx: DiscoveryContext): Promise<IgConfig> {
+export async function loadConfig(ctx: DiscoveryContext): Promise<IgConfig> {
   const row = await ctx.ws((q) => q.maybe<{ status: string; config: { igUserId?: string; graphVersion?: string; callsPerHour?: number }; secret_ciphertext: string | null }>(
     sql`select status, config, secret_ciphertext from integrations where key = 'instagram_graph'`));
   if (!row?.secret_ciphertext || !row.config.igUserId) {
@@ -42,7 +42,7 @@ async function loadConfig(ctx: DiscoveryContext): Promise<IgConfig> {
   };
 }
 
-async function graph<T>(ctx: DiscoveryContext, cfg: IgConfig, path: string, params: Record<string, string>): Promise<T> {
+export async function graph<T>(ctx: DiscoveryContext, cfg: IgConfig, path: string, params: Record<string, string>): Promise<T> {
   const u = new URL(`https://graph.facebook.com/${cfg.version}/${path}`);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   u.searchParams.set("access_token", cfg.token);
@@ -80,7 +80,7 @@ async function addCandidates(ctx: DiscoveryContext, handles: string[], foundVia:
   });
 }
 
-interface BusinessDiscovery {
+export interface BusinessDiscovery {
   business_discovery?: {
     id: string;
     username: string;

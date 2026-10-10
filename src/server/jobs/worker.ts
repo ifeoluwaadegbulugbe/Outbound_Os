@@ -139,7 +139,33 @@ export function startInProcessWorker(): void {
       }
     }
   };
+  // Collection runs in its own loop so long discovery/crawl batches never delay jobs or email dispatch.
+  const collectionLoop = async () => {
+    const { runCollectTick, runCrawlTick, runEmailCheckTick, getCollectionSettings } = await import("../collection/engine");
+    while (!stopped) {
+      let worked = false;
+      try {
+        const active = await withSystem((q) => q.many<{ id: string }>(sql`
+          select id from workspaces where coalesce((settings->'collection'->>'active')::boolean, false) and not coalesce((settings->'collection'->>'paused')::boolean, false)`));
+        for (const w of active) {
+          const settings = await withWorkspace({ workspaceId: w.id }, (q) => getCollectionSettings(q, w.id));
+          // Sources, crawler and email checks run side by side; a slow source never blocks the others.
+          const results = await Promise.all([
+            ...settings.sources.map((s) => runCollectTick(w.id, { budgetMs: 60_000, sources: [s] }).then((r) => r.units)),
+            runCrawlTick(w.id, { budgetMs: 60_000 }).then((r) => r.crawled),
+            runEmailCheckTick(w.id, { budgetMs: 30_000 }),
+            import("../collection/instagram-enrich").then((m) => m.runInstagramEnrichTick(w.id, { budgetMs: 60_000, countries: settings.countries })).then((r) => r.checked),
+          ]);
+          worked ||= results.some((n) => n > 0);
+        }
+      } catch (e) {
+        console.error("[worker] collection error", e);
+      }
+      await new Promise((r) => setTimeout(r, worked ? 1000 : 30_000));
+    }
+  };
   g.__obWorker = { stop: () => (stopped = true) };
   void loop();
+  void collectionLoop();
   console.log("[worker] in-process job worker started");
 }

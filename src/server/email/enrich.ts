@@ -102,11 +102,11 @@ export async function enrichProspectEmail(run: Run, workspaceId: string, prospec
 }
 
 /** Record an email that came with a source record (OSM/CSV/manual) with its provenance. */
-export async function recordSourceEmail(q: Q, workspaceId: string, prospectId: string, email: string, source: string, sourceUrl: string | null): Promise<void> {
+export async function recordSourceEmail(q: Q, workspaceId: string, prospectId: string, email: string, source: string, sourceUrl: string | null, isPrimary = true): Promise<void> {
   const e = normalizeAddress(email);
   if (!e) return;
   await q.exec(sql`insert into prospect_contacts (workspace_id, prospect_id, kind, value, is_primary, is_role, source, source_url, verification_status)
-    values (${workspaceId}, ${prospectId}, 'email', ${e}, true, ${isRoleAddress(e)}, ${source}, ${sourceUrl}, 'unverified') on conflict do nothing`);
+    values (${workspaceId}, ${prospectId}, 'email', ${e}, ${isPrimary}, ${isRoleAddress(e)}, ${source}, ${sourceUrl}, 'unverified') on conflict do nothing`);
   await q.exec(sql`update prospects set email_source = coalesce(email_source, ${source}), email_source_url = coalesce(email_source_url, ${sourceUrl}),
     email_discovered_at = coalesce(email_discovered_at, now()), email_status = case when email_status = 'none' then 'unverified' else email_status end
     where id = ${prospectId} and lower(email) = ${e}`);

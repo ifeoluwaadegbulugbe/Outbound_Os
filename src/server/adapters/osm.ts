@@ -9,7 +9,7 @@ import { NIGERIAN_CITIES } from "../domain/taxonomy";
  * OVERPASS_URL at a self-hosted/paid instance for heavy use.
  */
 
-const TAGS: Record<string, string[]> = {
+export const TAGS: Record<string, string[]> = {
   hair_stylist: ['["shop"="hairdresser"]["hairdresser"!="barber"]', '["shop"="hairdresser_supply"]', '["beauty"="hair"]'],
   barber: ['["shop"="hairdresser"]["hairdresser"="barber"]', '["shop"="barber"]', '["amenity"="barber"]'],
   nail_technician: ['["beauty"="nails"]', '["shop"="beauty"]["beauty"~"nails"]'],
@@ -25,6 +25,14 @@ const TAGS: Record<string, string[]> = {
   cleaning_service: ['["shop"="dry_cleaning"]', '["shop"="laundry"]', '["craft"="cleaning"]', '["office"="cleaning"]'],
   consultant: ['["office"="consulting"]'],
   coach: ['["office"="coaching"]'],
+  beauty_salon: ['["shop"="beauty"]'],
+  designer: ['["office"="interior_design"]', '["craft"="interior_decorator"]', '["office"="graphic_design"]'],
+  marketing_agency: ['["office"="advertising_agency"]', '["office"="marketing"]'],
+  home_service: ['["craft"="plumber"]', '["craft"="electrician"]', '["craft"="hvac"]', '["craft"="painter"]'],
+  auto_service: ['["amenity"="car_wash"]', '["shop"="car_repair"]'],
+  tutor: ['["amenity"="driving_school"]', '["amenity"="language_school"]', '["amenity"="music_school"]', '["amenity"="prep_school"]'],
+  pet_service: ['["shop"="pet_grooming"]', '["amenity"="animal_boarding"]'],
+  media_production: ['["amenity"="studio"]', '["craft"="photographic_laboratory"]'],
 };
 const GENERIC_BEAUTY = '["shop"="beauty"]';
 
@@ -34,7 +42,7 @@ function buildQuery(category: string, bbox: [number, number, number, number], fi
   return `[out:json][timeout:60];(${parts.join("")});out center tags 400;`;
 }
 
-interface OsmElement {
+export interface OsmElement {
   type: "node" | "way" | "relation";
   id: number;
   lat?: number;
@@ -52,6 +60,7 @@ function categoryFromTags(t: Record<string, string>, requested: string): string 
   if (t.leisure === "spa" || t.shop === "massage") return "spa_wellness";
   if (t.craft === "tailor" || t.shop === "tailor" || t.craft === "dressmaker") return "fashion_designer";
   if (t.craft === "photographer" || t.shop === "photo") return "photographer";
+  if (t.shop === "beauty") return requested === "beauty_salon" || !TAGS[requested] ? "beauty_salon" : requested;
   return requested;
 }
 
@@ -68,7 +77,7 @@ export function osmToProspect(el: OsmElement, requested: string, cityName: strin
     business_name: name,
     category: categoryFromTags(t, requested),
     description: [t.description, t.opening_hours ? `Opening hours: ${t.opening_hours}` : null].filter(Boolean).join(" · ") || null,
-    city: t["addr:city"] ?? cityName,
+    city: t["addr:city"] ?? (cityName || null),
     area: t["addr:suburb"] ?? t["addr:district"] ?? null,
     state: t["addr:state"] ?? null,
     country: (t["addr:country"] ?? countryCode).toUpperCase().slice(0, 2),

@@ -1,4 +1,4 @@
-import { resolveMx, resolve4, resolve6 } from "node:dns/promises";
+import { resolveMx, resolve4, resolve6, Resolver as DnsResolver } from "node:dns/promises";
 import { normalizeAddress, isDisposable, isRoleAddress, domainOfEmail } from "./address";
 
 /**
@@ -39,6 +39,19 @@ const systemResolver: Resolver = {
   },
 };
 
+const pub = new DnsResolver({ timeout: 5000, tries: 2 });
+pub.setServers(["1.1.1.1", "8.8.8.8", "9.9.9.9"]);
+const publicResolver: Resolver = {
+  mx: (d) => pub.resolveMx(d),
+  a: async (d) => {
+    try {
+      return await pub.resolve4(d);
+    } catch {
+      return pub.resolve6(d);
+    }
+  },
+};
+
 const mxCache = new Map<string, { ok: boolean | null; at: number }>();
 
 async function hasMailServer(domain: string, resolver: Resolver): Promise<boolean | null> {
@@ -58,6 +71,10 @@ async function hasMailServer(domain: string, resolver: Resolver): Promise<boolea
       } catch {
         ok = false;
       }
+    } else if (resolver === systemResolver && (code === 'ECONNREFUSED' || code === 'ESERVFAIL' || code === 'ETIMEOUT' || code === 'ECONNRESET')) {
+      // The OS resolver config isn't usable from Node (common on Windows/containers): ask public resolvers.
+      ok = await hasMailServer(domain, publicResolver).catch(() => null);
+      mxCache.delete(domain);
     } else ok = null; // timeout / SERVFAIL — we genuinely don't know
   }
   mxCache.set(domain, { ok, at: Date.now() });

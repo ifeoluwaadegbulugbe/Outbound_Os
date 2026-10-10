@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Target, Users, Search, Layers, Send, Inbox, CalendarClock, BarChart3, FlaskConical, Database, Settings,
+  LayoutDashboard, Gauge, Target, Users, Search, Layers, Send, Inbox, CalendarClock, BarChart3, FlaskConical, Database, Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,6 +20,7 @@ export const NAV: { section: string | null; items: NavItem[] }[] = [
       { href: "/", label: "Overview", icon: LayoutDashboard, key: "o" },
       { href: "/prospects", label: "Email Prospects", icon: Users, key: "p" },
       { href: "/discover", label: "Discover Businesses", icon: Search, key: "d" },
+      { href: "/collection", label: "Collection Progress", icon: Gauge, key: "l" },
       { href: "/campaigns", label: "Email Campaigns", icon: Target, key: "c" },
       { href: "/outreach", label: "Send Queue", icon: Send, key: "q", count: "review" },
       { href: "/inbox", label: "Inbox & Replies", icon: Inbox, key: "i", count: "inbox" },
