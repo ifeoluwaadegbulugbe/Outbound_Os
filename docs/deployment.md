@@ -36,13 +36,42 @@ grant ob_app to <your_app_user>;
 ```
 (Setting `DB_RLS_ROLE=` disables role switching — not recommended.)
 
-## Option C — serverless (e.g. Vercel Hobby is non-commercial; use a paid tier for business use)
+## Option C — Vercel (serverless)
 
-Set `WORKER_MODE=external` and drive jobs with a scheduler calling every minute:
-```
-GET /api/cron/worker   Authorization: Bearer $CRON_SECRET
-```
-or run `npm run worker` on any always-on box against the same `DATABASE_URL`. Multiple workers are safe (`SKIP LOCKED`).
+Vercel has no persistent disk and runs many short-lived instances, so the embedded database can't be used there (you'll see `DATABASE_URL is not set`). The long-running worker doesn't start on Vercel; scheduled work runs through a cron endpoint instead.
+
+1. **Create a Postgres database** (free): [Neon](https://neon.tech) or [Supabase](https://supabase.com). Use a new project, separate from Orbit. Copy two connection strings:
+   - the **pooled** one (Neon: "Pooled connection"; Supabase: transaction pooler, port 6543) → for Vercel
+   - the **direct** one → for migrations and the one-time data copy
+2. **Create the schema and copy your local data** (stop `npm run dev` first):
+   ```
+   TARGET_DATABASE_URL="<direct connection string>" npm run db:copy -- --dry   # counts only
+   TARGET_DATABASE_URL="<direct connection string>" npm run db:copy           # migrations + full copy
+   ```
+   It runs all migrations on the new database, then copies every table (prospects, campaigns, emails, settings…) keeping ids. It refuses to write into a database that already has data.
+3. **Vercel → Project → Settings → Environment Variables** (Production):
+   ```
+   DATABASE_URL=<pooled connection string>
+   DB_PREPARE=false                       # needed for Supabase's transaction pooler (port 6543)
+   ENCRYPTION_KEY=<the SAME value as in your .env.local>   # otherwise stored mailbox tokens/keys can't be decrypted
+   APP_URL=https://<your-domain-or-vercel-url>
+   CRON_SECRET=<long random string>
+   PRODUCT_SIGNUP_URL=https://app.getorbitcrm.com/signup
+   ENABLE_MOCK_SOURCES=false
+   # optional: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET, MS_CLIENT_ID / MS_CLIENT_SECRET, ZEROBOUNCE_API_KEY
+   ```
+   Then redeploy. Update the OAuth redirect URIs to `{APP_URL}/api/email/oauth/{gmail|microsoft}/callback`.
+4. **Schedule the worker every minute** (queued emails, reply/bounce sync, follow-ups). Vercel Hobby crons run at most once a day, so use a free external scheduler such as [cron-job.org](https://cron-job.org):
+   ```
+   GET https://<your-app>/api/cron/worker
+   Header: Authorization: Bearer <CRON_SECRET>
+   ```
+5. **Collection doesn't run on Vercel** (it downloads large map files and runs for hours). Run it from your own machine against the production database when you want more businesses:
+   ```
+   DATABASE_URL="<direct connection string>" npm run collect -- --countries NG --minutes 120
+   ```
+
+Note: Vercel's Hobby plan is for non-commercial use; use Pro for business use.
 
 ## Production checklist
 

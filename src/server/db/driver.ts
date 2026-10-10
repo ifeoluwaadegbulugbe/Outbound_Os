@@ -34,6 +34,9 @@ export interface DriverOptions {
 export async function createDriver(opts: DriverOptions = {}): Promise<Driver> {
   const url = opts.databaseUrl ?? process.env.DATABASE_URL;
   if (url) return createPostgresDriver(url);
+  if (process.env.VERCEL) {
+    throw new Error("DATABASE_URL is not set. Vercel has no persistent disk, so the embedded database can't run there: create a Postgres database (Neon or Supabase free tier), set DATABASE_URL in Vercel → Settings → Environment Variables and redeploy. See docs/deployment.md.");
+  }
   if (process.env.NODE_ENV === "production" && !process.env.ALLOW_PGLITE_IN_PRODUCTION) {
     throw new Error(
       "DATABASE_URL is not set. Embedded PGlite is for development only — set DATABASE_URL to a Postgres database " +
@@ -48,7 +51,7 @@ const SEARCH_PATH = "outbound, public, extensions";
 async function createPostgresDriver(url: string): Promise<Driver> {
   const { default: postgres } = await import("postgres");
   const sql = postgres(url, {
-    max: Number(process.env.DB_POOL_MAX ?? 10),
+    max: Number(process.env.DB_POOL_MAX ?? (process.env.VERCEL ? 3 : 10)),
     // Supabase/PgBouncer transaction pooling does not support prepared statements.
     prepare: process.env.DB_PREPARE === "false" ? false : !url.includes(":6543"),
     connection: { search_path: SEARCH_PATH, application_name: "orbit-outbound" },
