@@ -22,6 +22,8 @@ if (!target) {
   process.exit(1);
 }
 const dry = process.argv.includes("--dry");
+// --resume: continue an interrupted copy (target already has some rows).
+const resume = process.argv.includes("--resume");
 
 const src = await createDriver({ databaseUrl: "", pgliteDir: pgliteDir() });
 const dstDriver = await createDriver({ databaseUrl: target });
@@ -57,7 +59,7 @@ const visit = (t: string) => {
 tables.forEach(visit);
 
 const existing = await dst<{ n: number }[]>`select count(*)::int as n from outbound.workspaces`;
-if (!dry && existing[0].n > 0) {
+if (!dry && !resume && existing[0].n > 0) {
   console.error("[copy] the target already has workspaces. Refusing to merge into a database with data; use an empty database.");
   process.exit(1);
 }
@@ -75,15 +77,31 @@ for (const t of order) {
   const names = cols.map((c) => c.column_name);
   const jsonCols = new Set(cols.filter((c) => c.data_type === "jsonb" || c.data_type === "json").map((c) => c.column_name));
   // Postgres allows at most 65,535 bind parameters per statement: size batches by column count.
-  const batch = Math.max(1, Math.min(1000, Math.floor(60_000 / names.length)));
-  for (let offset = 0; offset < n; offset += batch) {
-    const rows = await src.query<Row>(`select ${names.map((c) => `"${c}"`).join(", ")} from outbound."${t}" order by 1 limit ${batch} offset ${offset}`);
+  const batch = Math.max(1, Math.min(5000, Math.floor(60_000 / names.length)));
+  // Keyset pagination on the first column (the primary key): each batch starts after the last row sent,
+  // so batches stay fast on large tables (OFFSET re-scans everything before it).
+  const key = names[0];
+  const [{ have }] = await dst.unsafe<{ have: number }[]>(`select count(*)::int as have from outbound."${t}"`);
+  if (resume && have >= n) {
+    console.log(`[copy] ${t}: already copied (${have} rows)`);
+    total += n;
+    continue;
+  }
+  let last: unknown = resume && have > 0 ? (await dst.unsafe<{ m: unknown }[]>(`select "${key}" as m from outbound."${t}" order by "${key}" desc limit 1`))[0].m : null;
+  for (;;) {
+    const rows = await src.query<Row>(
+      `select ${names.map((c) => `"${c}"`).join(", ")} from outbound."${t}" ${last == null ? "" : `where "${key}" > $1`} order by "${key}" limit ${batch}`,
+      last == null ? [] : [last],
+    );
+    if (!rows.length) break;
+    last = rows[rows.length - 1][key];
     const prepared = rows.map((r) => {
       const o: Row = {};
       for (const c of names) o[c] = jsonCols.has(c) && r[c] != null ? dst.json(r[c] as never) : r[c];
       return o;
     });
     await dst`insert into ${dst(`outbound.${t}`)} ${dst(prepared as never, names)} on conflict do nothing`;
+    if (rows.length < batch) break;
   }
   total += n;
   console.log(`[copy] ${t}: ${n} rows`);
