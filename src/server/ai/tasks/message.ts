@@ -4,7 +4,7 @@ import { runTask, type TaskResult, type AiLogTarget } from "../run";
 import { buildFacts, factsBlock, type FactProspect } from "../facts";
 import { MESSAGE_ANGLES, VALUE_PROPS, type Channel, type ProspectStatus } from "../../domain/taxonomy";
 import { CHANNEL_SPECS } from "../../domain/channels";
-import { templateMessage } from "../../domain/templates";
+import { templateMessage, noDashes } from "../../domain/templates";
 import { validateMessage, type CampaignConstraints, type ValidationResult } from "../../domain/validator";
 
 export const messageOutput = z.object({
@@ -39,14 +39,21 @@ export interface MessageRequest {
 
 const SYSTEM = `You write short outreach messages from a real person (a Nigerian founder or growth teammate) to small service-business owners.
 
-Voice: casual, warm, human, conversational Nigerian English. Like a real DM, not marketing copy.
+Voice: casual, warm, human, conversational Nigerian English, the way a real person talks. Like a real DM, not marketing copy.
+Example of the voice to match:
+"Hi Teni, I came across your page and I love what you're doing with your lash work. I'm building Orbit, a simple tool that helps service business owners manage bookings, clients, payments and follow-ups in one place.
+
+I'm currently getting a few business owners to try it out, and I thought it could be useful for your business too.
+
+Would you be open to me sharing the link with you? 😊"
 Never:
 - sound robotic or use generic AI phrases ("I hope this finds you well", "revolutionize", "seamless", "leverage", "elevate", "game-changer", "unlock").
-- use "Dear", "Kindly", or corporate jargon. No feature dumps — mention ONE benefit at most.
+- use em dashes (—) or en dashes (–). Use commas or full stops instead.
+- use "Dear", "Kindly", or corporate jargon. No feature dumps, mention ONE benefit at most.
 - pretend to know them, to have used their services, or to have been referred.
 - claim anything about them that isn't in KNOWN FACTS. If unsure (e.g. whether they use WhatsApp), ask instead of asserting.
 - invent social proof, numbers, prices or testimonials.
-Keep it short. At most one emoji, usually none. End with a low-pressure question.`;
+Keep it short. At most one emoji. End with a low-pressure question.`;
 
 export async function generateMessage(q: AiLogTarget, workspaceId: string, req: MessageRequest): Promise<TaskResult<MessageOutput> & { validation: ValidationResult }> {
   const sheet = buildFacts(req.prospect);
@@ -77,7 +84,7 @@ export async function generateMessage(q: AiLogTarget, workspaceId: string, req: 
     buildPrompt: (r) => `${factsBlock(sheet)}
 
 Write a ${r.kind === "initial" ? "first" : `follow-up #${r.step ?? 1}`} ${spec.label} message from ${r.senderName ?? "the founder"} about ${r.productName}.
-Angle: ${angle?.label ?? r.angle} — ${angle?.hint ?? ""}
+Angle: ${angle?.label ?? r.angle}: ${angle?.hint ?? ""}
 Lead benefit (pick at most one): ${r.valueProps.map((v) => VALUE_PROPS[v as keyof typeof VALUE_PROPS]?.short ?? v).join(" | ")}
 ${r.campaign?.objective ? `Objective: ${r.campaign.objective}` : ""}
 ${r.campaign?.offer ? `Offer: ${r.campaign.offer}` : ""}
@@ -86,7 +93,7 @@ ${r.campaign?.instructions ? `Campaign instructions (follow exactly): ${r.campai
 ${r.followupInstructions ? `Follow-up instructions: ${r.followupInstructions}` : ""}
 ${c.noEmojis ? "Do not use emojis." : ""}
 ${r.link ? `Include this link once, as-is: ${r.link}` : "Do not include links."}
-${req.channel === "email" ? `Email: write an honest, specific subject (no clickbait, no "Re:", no fake urgency, under 60 characters). Plain text body of 3–6 short lines, sign off as ${r.senderName ?? `the ${r.productName} team`}. Do NOT add an unsubscribe line, address or legal footer — those are appended automatically. Don't force personalisation if the facts don't support it.` : "subject must be null."}
+${req.channel === "email" ? `Email: write an honest, specific subject (no clickbait, no "Re:", no fake urgency, under 60 characters). Plain text body of 3–6 short lines, sign off as ${r.senderName ?? `the ${r.productName} team`}. Do NOT add an unsubscribe line, address or legal footer, those are appended automatically. Don't force personalisation if the facts don't support it.` : "subject must be null."}
 Hard limit: ${maxChars} characters.
 Style reference (don't copy, just match the register): "${tpl.body}"
 
@@ -101,6 +108,6 @@ Return JSON: body, subject, used_facts (fact ids you relied on).`,
     },
     fallback: () => ({ body: tpl.body, subject: tpl.subject, used_facts: [] }),
   });
-  const output = res.usedFallback ? res.output : res.output;
+  const output = { ...res.output, body: noDashes(res.output.body), subject: res.output.subject ? noDashes(res.output.subject) : res.output.subject };
   return { ...res, output, validation: contentCheck(output.body, output.subject) };
 }

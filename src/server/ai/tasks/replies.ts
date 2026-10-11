@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Q } from "../../db";
 import { runTask, type TaskResult, type AiLogTarget } from "../run";
 import { classifyByRules, REPLY_INTENTS, type ReplyIntent } from "../../domain/classifier";
-import { templateReply } from "../../domain/templates";
+import { templateReply, noDashes } from "../../domain/templates";
 import { buildFacts, factsBlock, type FactProspect } from "../facts";
 import { validateMessage } from "../../domain/validator";
 import type { Channel, ProspectStatus } from "../../domain/taxonomy";
@@ -80,7 +80,7 @@ export interface ReplyRequest {
 
 export async function suggestReply(q: AiLogTarget, workspaceId: string, req: ReplyRequest): Promise<TaskResult<z.infer<typeof replyOutput>>> {
   const sheet = buildFacts(req.prospect);
-  return runTask(q, workspaceId, {
+  const res = await runTask(q, workspaceId, {
     task: "reply.suggest",
     input: req,
     output: replyOutput,
@@ -107,4 +107,5 @@ Draft our next reply. Return JSON: { "body": "..." }`,
     },
     fallback: (r) => ({ body: templateReply(r.intent, r.prospect, r.productName, r.link) }),
   });
+  return { ...res, output: { ...res.output, body: noDashes(res.output.body) } };
 }

@@ -47,7 +47,7 @@ describe("acceptance workflow", () => {
       const id = await q.value<string>(sql`
         insert into campaigns (workspace_id, name, slug, status, categories, cities, channels, constraints)
         values (${ws}, 'Lagos Beauty Businesses', 'lagos-beauty', 'active', ${textArray(["nail_technician", "hair_stylist"])}, ${textArray(["Lagos"])},
-                ${textArray(["instagram", "whatsapp"])}, ${json({ maxChars: 300, noEmojis: true })}) returning id`);
+                ${textArray(["instagram", "whatsapp"])}, ${json({ maxChars: 500, noEmojis: true })}) returning id`);
       await q.exec(sql`insert into message_variants (workspace_id, campaign_id, key, name, angle) values (${ws}, ${id}, 'A', 'Problem', 'problem_first')`);
       return id;
     });
@@ -94,7 +94,7 @@ describe("acceptance workflow", () => {
     messageId = g.messageId!;
     const m = await run((q) => q.one<{ body: string; channel: string }>(sql`select body, channel from outreach_messages where id = ${messageId}`));
     expect(m.channel).toBe("instagram");
-    expect(m.body.length).toBeLessThanOrEqual(300);
+    expect(m.body.length).toBeLessThanOrEqual(500);
     expect(m.body).toMatch(/Teni|Nails by Teni/);
 
     // A bad edit is blocked with a reason…

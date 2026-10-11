@@ -26,7 +26,7 @@ describe("message templates", () => {
         const v = validateMessage({
           body: m.body, channel: "instagram", kind: "initial",
           prospect: { ...p, owner_name: null, status: "QUALIFIED", do_not_contact: false, accepts_whatsapp_bookings: null, follower_count: 1000, tiktok_handle: null, whatsapp: null, phone: null, email: null },
-          context: { workspacePaused: false }, constraints: { maxChars: 300, noEmojis: true },
+          context: { workspacePaused: false }, constraints: { maxChars: 500, noEmojis: true },
         });
         expect(v.issues.filter((i) => i.severity === "block"), `${a.key}: ${m.body}`).toEqual([]);
         expect(v.issues.map((i) => i.code), `${a.key}: ${m.body}`).not.toContain("not_personalized");

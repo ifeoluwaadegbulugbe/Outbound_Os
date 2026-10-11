@@ -140,7 +140,7 @@ export async function loadDemoData(q: Q, ctx: { workspaceId: string; userId: str
               ${textArray(cats)}, 'NG', ${textArray(cities)}, ${textArray(channels)}, ${goal}, 'Get Orbit signups', 'Free Orbit account',
               'Casual, conversational, human, Nigerian — not corporate',
               'Keep messages under 300 characters. Sound like a Nigerian founder casually reaching out. Mention the booking link only if they have one.',
-              ${json({ maxChars: 300, mentionBookingLinkOnlyIfPresent: true })}, ${icpId}, ${seqId},
+              ${json({ maxChars: 500, mentionBookingLinkOnlyIfPresent: true })}, ${icpId}, ${seqId},
               ${new Date(now - startDaysAgo * DAY)}, ${new Date("2026-10-31")}, ${ctx.userId})
       returning id`);
   const cLagos = await mkCampaign("Lagos Beauty Businesses", "lagos-beauty-demo", "active", ["nail_technician", "hair_stylist", "makeup_artist", "lash_technician"], ["Lagos"], ["instagram", "whatsapp", "tiktok"], 5000, 24);
@@ -441,7 +441,7 @@ export async function loadDemoData(q: Q, ctx: { workspaceId: string; userId: str
     const v = validateMessage({
       body: msg.body, channel, kind: "initial",
       prospect: { ...tp, owner_name: p.row.owner_name as string | null, status: "QUALIFIED", do_not_contact: false, accepts_whatsapp_bookings: p.row.accepts_whatsapp_bookings as boolean | null, follower_count: p.row.follower_count as number | null, tiktok_handle: p.row.tiktok_handle as string | null, whatsapp: p.row.whatsapp as string | null, phone: p.row.phone as string | null, email: null },
-      context: { workspacePaused: false }, constraints: { maxChars: 300, mentionBookingLinkOnlyIfPresent: true },
+      context: { workspacePaused: false }, constraints: { maxChars: 500, mentionBookingLinkOnlyIfPresent: true },
     });
     drafts.push([ws, p.id, p.campaign, channel, "initial", 0, variantIds[p.campaign][variant.key], variant.angle, textArray(msg.valueProps), msg.body, msg.body, "template", v.ok ? "needs_review" : "blocked", json(v), new Date(now - Math.floor(r() * 6) * 3_600_000)]);
   }

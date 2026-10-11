@@ -36,8 +36,8 @@ export function CampaignForm({ sources }: { sources: { key: string; label: strin
   const [objective, setObjective] = useState("Get Orbit signups");
   const [offer, setOffer] = useState("Free Orbit account");
   const [tone, setTone] = useState("Casual, conversational, human, Nigerian — not corporate");
-  const [instructions, setInstructions] = useState("Keep messages under 300 characters. Sound like a Nigerian founder casually reaching out. Do not use emojis. Mention the booking link only if they have one.");
-  const [maxChars, setMaxChars] = useState("300");
+  const [instructions, setInstructions] = useState("Sound like a real person casually reaching out, the way you would talk. Short paragraphs, no em dashes. Mention the booking link only if they have one.");
+  const [maxChars, setMaxChars] = useState("500");
   const [noEmojis, setNoEmojis] = useState(true);
   const [includeLink, setIncludeLink] = useState(false);
   const [addMatching, setAddMatching] = useState(true);

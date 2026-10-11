@@ -47,33 +47,40 @@ function pick<T>(arr: readonly T[], seed: string, salt = ""): T {
   return arr[Math.abs(h) % arr.length];
 }
 
+/** What they do, as it reads after "I love what you're doing with …". */
 const CRAFT: Record<string, string> = {
-  hair_stylist: "hair",
-  barber: "cuts",
-  nail_technician: "nail sets",
-  lash_technician: "lash work",
-  makeup_artist: "glam",
-  skincare: "skin treatments",
-  spa_wellness: "sessions",
-  fitness_trainer: "training sessions",
-  photographer: "shoots",
-  event_planner: "events",
-  fashion_designer: "designs",
-  coach: "coaching sessions",
-  consultant: "client work",
-  tutor: "lessons",
-  freelancer: "projects",
-  caterer: "orders",
-};
-
-const CLIENT_WORD: Record<string, string> = {
-  photographer: "clients",
-  event_planner: "clients",
-  coach: "clients",
-  consultant: "clients",
-  freelancer: "clients",
-  fashion_designer: "customers",
-  caterer: "customers",
+  hair_stylist: "your hair styling",
+  beauty_salon: "your salon",
+  barber: "your barbing",
+  nail_technician: "your nails",
+  lash_technician: "your lash work",
+  makeup_artist: "your makeup",
+  skincare: "your skincare treatments",
+  spa_wellness: "your spa",
+  photographer: "your photography",
+  media_production: "your video work",
+  event_planner: "your events",
+  caterer: "your catering",
+  fashion_designer: "your designs",
+  designer: "your design work",
+  marketing_agency: "your marketing work",
+  consultant: "your consulting",
+  coach: "your coaching",
+  tutor: "your lessons",
+  fitness_trainer: "your training sessions",
+  cleaning_service: "your cleaning service",
+  home_service: "your services",
+  freelancer: "your work",
+  tattoo_artist: "your tattoos",
+  henna_artist: "your henna designs",
+  personal_stylist: "your styling",
+  florist: "your flowers",
+  cake_designer: "your cakes",
+  entertainer: "your entertainment",
+  accountant: "your accounting practice",
+  hr_recruiter: "your recruiting work",
+  legal_practice: "your practice",
+  immigration_consultant: "your immigration services",
 };
 
 /**
@@ -89,25 +96,19 @@ export function greetingName(p: TemplateProspect): string | null {
   return null;
 }
 
-function greet(p: TemplateProspect, seed: string): string {
-  const name = greetingName(p);
-  return name ? pick([`Hi ${name}`, `Hey ${name}`], seed, "g") : pick([`Hi ${p.business_name} team`, `Hello ${p.business_name}`], seed, "g");
+/** People don't write em/en dashes in DMs; turn them (and spaced hyphens) into commas. */
+export function noDashes(text: string): string {
+  return text
+    .replace(/[ \t]*[—–][ \t]*/g, ", ")
+    .replace(/ +- +/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*([.!?])/g, "$1")
+    .replace(/^,\s*/gm, "");
 }
 
-/** What we can truthfully say we noticed. */
-function observation(p: TemplateProspect, seed: string): string | null {
-  const s = (k: string) => p.signals?.[k]?.value === true;
-  if (s("dmBookings")) return pick(["I noticed bookings go through your DMs", "saw that clients book you through DMs"], seed, "o");
-  if (s("whatsappBookings") || p.accepts_whatsapp_bookings) return pick(["saw you take bookings on WhatsApp", "noticed clients book you on WhatsApp"], seed, "o");
-  if (s("manualPayments")) return "noticed you take deposits before bookings";
-  if (p.booking_url) return "saw you already have a booking link set up";
-  return null;
-}
-
-function craftLine(p: TemplateProspect, seed: string): string {
-  const craft = CRAFT[p.category ?? ""] ?? "work";
-  const where = p.city ? ` in ${p.city}` : "";
-  return pick([`came across your ${craft}${where}`, `been seeing your ${craft}${where}`, `found your page${where}`], seed, "c");
+/** Where we can honestly say we saw them. */
+function seenOn(p: TemplateProspect, channel: Channel): string {
+  return channel === "instagram" || channel === "tiktok" || channel === "facebook" ? "your page" : "your business online";
 }
 
 export function templateMessage(input: TemplateInput): TemplateOutput {
@@ -115,53 +116,61 @@ export function templateMessage(input: TemplateInput): TemplateOutput {
   const seed = p.id;
   const vps = (input.valueProps?.length ? input.valueProps : CATEGORY_VALUE_PROPS[p.category ?? "other_service"] ?? ["bookings", "clients"]) as ValuePropKey[];
   const vp1 = VALUE_PROPS[vps[0]]?.short ?? VALUE_PROPS.bookings.short;
-  const clients = CLIENT_WORD[p.category ?? ""] ?? "clients";
-  const hi = greet(p, seed);
-  const obs = observation(p, seed);
+  const name = greetingName(p);
+  const hi = name ? `Hi ${name}` : "Hi there";
   const sender = input.senderName ? input.senderName.split(" ")[0] : null;
-  const intro = sender ? `I'm ${sender}, I'm building ${productName}` : `I'm building ${productName}`;
-  const linkLine = input.link ? `\n\n${input.link}` : "";
-  const em = input.noEmojis ? "" : pick(["", "", " 🙂"], seed, "e");
+  const smile = input.noEmojis ? "" : " 😊";
+  const craft = CRAFT[p.category ?? ""] ?? p.business_name;
+  const linkLine = input.link ? `
+
+${input.link}` : "";
   let body: string;
 
   if (input.kind === "followup") {
     const step = input.step ?? 1;
-    if (step === 1) body = pick([`${hi}, just bumping this in case it got buried. No pressure at all.`, `${hi}, quick nudge on my last message — happy to share more if useful.`], seed, "f1");
-    else if (step === 2) body = `${hi}, one specific thing ${productName} does for businesses like yours: it lets you ${vp1}. If that's useful, I can set you up in a few minutes.${linkLine}`;
-    else body = `${hi}, I'll stop here so I'm not a bother. If you ever want an easier way to ${vp1}, ${productName} is free to try. Wishing you a great month!${em}`;
-    return { body: body.trim(), subject: channel === "email" ? `Re: ${p.business_name}` : null, valueProps: vps.slice(0, 1) };
+    if (step === 1) body = pick([
+      `${hi}, just following up on my last message in case it got buried. Would you like me to send you the link to try ${productName}?${smile}`,
+      `${hi}, just checking in on my message from last week. Happy to send you the link to ${productName} if you'd like to take a look.${smile}`,
+    ], seed, "f1");
+    else if (step === 2) body = `${hi}, one more thing I think you'd like. With ${productName} you can ${vp1}, all in one place. If you want, I can help you set it up, it only takes a few minutes.${linkLine}`;
+    else body = `${hi}, I don't want to keep bugging you, so this will be my last message. If you ever want an easier way to ${vp1}, I'd be happy to share ${productName} with you. Wishing you a great month!${smile}`;
+    if (channel === "email" && sender) body += `
+
+${sender}`;
+    return { body: noDashes(body).trim(), subject: channel === "email" ? `Re: Quick question for ${name ?? p.business_name}` : null, valueProps: vps.slice(0, 1) };
   }
 
-  switch (angle) {
-    case "problem_first":
-      body = obs
-        ? `${hi}, ${obs}. ${intro} — it lets you ${vp1}. Would you be open to trying it?${em}`
-        : `${hi}, ${craftLine(p, seed)}. Quick question: how do you keep track of bookings right now? ${intro} to make that part easier.`;
-      break;
-    case "curiosity":
-      body = `${hi}, ${craftLine(p, seed)} — love it. Curious, how do you handle bookings and reminders at the moment? Asking because ${sender ? `I'm ${sender} and ` : ""}I'm building ${productName} for businesses like yours.`;
-      break;
-    case "outcome":
-      body = `${hi}, ${craftLine(p, seed)}. Thought this might help: ${productName} lets you ${vp1}. Fewer no-shows, less admin. Want me to send you a link to try it free?`;
-      break;
-    case "feedback_request":
-      body = obs
-        ? `${hi}, ${obs}. ${intro} and I'd really value your honest opinion as someone who runs ${clients} bookings every day. Could I show you and get your feedback?`
-        : `${hi}, ${intro} for ${CRAFT[p.category ?? ""] ? `${p.category?.replace(/_/g, " ")}s` : "service businesses"} and I'd love your honest take on it. Would you be open to a quick look?`;
-      break;
-    case "founder":
-      body = `${hi}, ${sender ? `${sender} here — ` : ""}founder of ${productName}. ${craftLine(p, seed)} and thought you'd be a great fit for what we're building: one place to ${vp1}. Can I set you up for free?`;
-      break;
-    case "product_intro":
-    default:
-      body = `${hi}, ${intro} — a simple app that helps ${clients.replace(/s$/, "")}-facing businesses ${vp1}. ${craftLine(p, seed).replace(/^./, (c) => c.toUpperCase())} and thought it could be useful. ${input.offer ? `${input.offer}. ` : ""}Interested?`;
-  }
+  const opener = pick([
+    `${hi}, I came across ${name ? seenOn(p, channel) : p.business_name} and I love what you're doing with ${craft}.`,
+    `${hi}, I came across ${name ? seenOn(p, channel) : p.business_name} and I really like what you're doing with ${craft}.`,
+  ], seed, "o");
+  const pitch = `${sender ? `I'm ${sender} and I'm building` : "I'm building"} ${productName}, a simple tool that helps service business owners manage bookings, clients, payments and follow-ups in one place.`;
+  const middle = angle === "feedback_request"
+    ? "I'm getting a few business owners to try it out, and I'd really love your honest feedback on it."
+    : pick([
+        "I'm currently getting a few business owners to try it out, and I thought it could be useful for your business too.",
+        `I'm getting a small group of business owners to try it out right now, and I thought it could really help ${p.business_name}.`,
+      ], seed, "m");
+  const offer = input.offer ? `${input.offer.replace(/[.!]?$/, ".")} ` : "";
+  const close = pick([
+    `Would you be open to me sharing the link with you?${smile}`,
+    `Would you like me to send you the link so you can check it out?${smile}`,
+  ], seed, "c");
+
+  body = `${opener} ${pitch}
+
+${middle}
+
+${offer}${close}`;
   if (input.link && !body.includes(input.link)) body += linkLine;
   // Email footer (sender identity, address, unsubscribe link) is appended at send time.
-  if (channel === "email") body += `\n\nThanks,\n${sender ?? `The ${productName} team`}`;
+  if (channel === "email") body += `
+
+Thanks,
+${sender ?? `The ${productName} team`}`;
   return {
-    body: body.replace(/\s+([,.?!])/g, "$1").replace(/ {2,}/g, " ").trim(),
-    subject: channel === "email" ? pick([`Quick question, ${p.first_name ?? p.business_name}`, `${p.business_name} + ${productName}`], seed, "s") : null,
+    body: noDashes(body.replace(/\s+([,.?!])/g, "$1").replace(/ {2,}/g, " ")).trim(),
+    subject: channel === "email" ? `Quick question for ${name ?? p.business_name}` : null,
     valueProps: vps.slice(0, 1),
   };
 }
@@ -173,18 +182,18 @@ export function templateReply(intent: string, p: { first_name: string | null; ca
   const l = link ? ` Here's the link: ${link}` : "";
   switch (intent) {
     case "pricing":
-      return `${hi} You can start on ${productName} for free — no card needed. Paid plans only matter once you want the extras. Want me to send you the link to get started?${l}`;
+      return `${hi} You can start on ${productName} for free, no card needed. Paid plans only matter once you want the extras. Want me to send you the link to get started?${l}`;
     case "interested":
     case "signup_intent":
-      return `${hi} Here's how to get started — it takes about 2 minutes to set up your services and start taking bookings.${l || " Want me to send the link?"}`;
+      return `${hi} Here's how to get started. It takes about 2 minutes to set up your services and start taking bookings.${l || " Want me to send the link?"}`;
     case "demo_request":
       return `${hi} Happy to show you. What day and time works for a quick 10-minute call this week?`;
     case "competitor":
-      return `That makes sense. ${productName} isn't just a booking tool — it also helps you ${VALUE_PROPS[vps[1] ?? "clients"].short} and ${VALUE_PROPS[vps[2] ?? "payments"].short}, all in one place. If you're open to it, I'd love for you to take a quick look and tell me what you think.`;
+      return `That makes sense. ${productName} isn't just a booking tool, it also helps you ${VALUE_PROPS[vps[1] ?? "clients"].short} and ${VALUE_PROPS[vps[2] ?? "payments"].short}, all in one place. If you're open to it, I'd love for you to take a quick look and tell me what you think.`;
     case "maybe_later":
       return `No problem at all! I'll check back in a few weeks. If anything changes before then, just message me.`;
     case "question":
-      return `${hi} Good question — `;
+      return `${hi} Good question! `;
     case "not_interested":
       return `No worries at all, thanks for letting me know. Wishing you a great month!`;
     case "wrong_person":
