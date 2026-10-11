@@ -137,7 +137,8 @@ export async function generateDraft(
     productName: ctx.workspace.product_name,
     campaign: ctx.campaign ? { tone: ctx.campaign.tone, offer: ctx.campaign.offer, instructions: ctx.campaign.instructions, constraints: ctx.campaign.constraints ?? {}, objective: ctx.campaign.objective } : null,
     valueProps: plan.valueProps,
-    senderName: actor.senderName,
+    // The sender identity (Settings → Email & sender) is who signs the email footer; use it in the body too.
+    senderName: ((ctx.workspace.settings.sender as { senderName?: string } | undefined)?.senderName || "").trim() || actor.senderName,
     link: linkCode?.url ?? null,
     followupInstructions: input.followupInstructions,
   });
