@@ -56,7 +56,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
       review = await q.many<ReviewItem>(sql`
         select ${ITEM_SELECT} from outreach_messages m join prospects p on p.id = m.prospect_id left join campaigns c on c.id = m.campaign_id
         where m.status in ('needs_review','blocked') ${channelFilter} ${batchFilter}
-        order by (m.status = 'blocked'), p.priority_score desc nulls last, m.created_at limit 100`);
+        order by (m.status = 'blocked'), p.is_demo, p.priority_score desc nulls last, m.created_at limit 100`);
     } else if (tab === "ready" || tab === "queued") {
       emailRows = await q.many<EmailRow>(sql`
         select ${EMAIL_SELECT} from outreach_messages m join prospects p on p.id = m.prospect_id left join campaigns c on c.id = m.campaign_id

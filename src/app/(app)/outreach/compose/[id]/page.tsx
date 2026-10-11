@@ -42,7 +42,8 @@ export default async function ComposePage({ params }: { params: Promise<{ id: st
     const contacts = await q.many<{ value: string; is_primary: boolean; is_role: boolean; source: string | null; source_url: string | null; verification_status: string | null }>(sql`
       select value, is_primary, is_role, source, source_url, verification_status from prospect_contacts where prospect_id = ${p.id} and kind = 'email' order by is_primary desc, is_role, value`);
     const research = await q.maybe<{ summary: string; statements: { text?: string; statement?: string; kind: string; basis?: string[] }[]; why_relevant: string[]; created_at: Date; generator: string }>(sql`
-      select summary, statements, why_relevant, created_at, generator from prospect_research where prospect_id = ${p.id} order by created_at desc limit 1`);
+      select summary, coalesce(statements->'statements', '[]'::jsonb) as statements, why_relevant, created_at, generator
+      from prospect_research where prospect_id = ${p.id} order by created_at desc limit 1`);
     const accounts = await q.many<{ id: string; email_address: string | null; label: string; provider: string; status: string }>(sql`
       select id, email_address, label, provider, status from sender_accounts where channel = 'email' and is_active order by created_at`);
     const settings = await getEmailSettings(q, user.workspaceId);
