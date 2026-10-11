@@ -36,6 +36,29 @@ export async function sendEmailNowAction(id: string): Promise<ActionResult> {
   return r.ok ? { ok: true, message: "Sent. Provider confirmed delivery to the mail server." } : { ok: false, error: r.error };
 }
 
+/**
+ * Send several approved emails right away, one after another through the same
+ * checks as a single send (caps, suppression, country rules…). Stops when time
+ * runs short so the request finishes; whatever is left stays in Ready to send.
+ */
+export async function sendEmailsNowAction(input: string[]): Promise<ActionResult> {
+  const { run, actor } = await ctx();
+  const list = z.array(z.string().uuid()).min(1).max(200).parse(input);
+  const started = Date.now();
+  let sent = 0;
+  const failed: string[] = [];
+  for (const id of list) {
+    if (Date.now() - started > 45_000) break;
+    const r = await sendEmailMessage(run, actor, id);
+    if (r.ok) sent++;
+    else failed.push(r.error);
+  }
+  refresh();
+  const left = list.length - sent - failed.length;
+  const parts = [`${sent} sent`, failed.length ? `${failed.length} not sent (${failed[0]})` : "", left ? `${left} still in Ready to send, press Send again` : ""].filter(Boolean);
+  return sent ? { ok: true, message: parts.join(" · ") } : { ok: false, error: parts.join(" · ") };
+}
+
 export async function sendTestEmailAction(id: string, to: string): Promise<ActionResult> {
   const { run, actor } = await ctx();
   const addr = normalizeAddress(to);

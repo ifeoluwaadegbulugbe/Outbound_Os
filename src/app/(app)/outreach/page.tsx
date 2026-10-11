@@ -16,6 +16,8 @@ import { senderUsage as emailSenderUsage } from "@/server/services/email-metrics
 import { EmailReadyList, EmailQueuedList, EmailSentList, type EmailRow } from "./email-lists";
 
 export const metadata = { title: "Send Queue" };
+// Sending several emails at once (sendEmailsNowAction) runs in this route.
+export const maxDuration = 60;
 
 const EMAIL_SELECT = sql`
   m.id, m.prospect_id, p.business_name, p.email, p.email_status, p.city, m.subject, m.kind, m.step, c.name as campaign_name, m.status, m.error,

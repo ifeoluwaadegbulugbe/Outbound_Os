@@ -11,7 +11,7 @@ import { Table, Th, Td, Tr } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
 import { EmailStatusBadge } from "@/components/email-status";
 import { fmtNum, timeAgo } from "@/lib/utils";
-import { sendEmailNowAction, queueEmailsAction, unqueueEmailsAction } from "./email-actions";
+import { sendEmailNowAction, sendEmailsNowAction, queueEmailsAction, unqueueEmailsAction } from "./email-actions";
 
 export interface EmailRow {
   id: string; prospect_id: string; business_name: string; email: string | null; email_status: string; subject: string | null; kind: string; step: number;
@@ -42,6 +42,12 @@ export function EmailReadyList({ rows, total, canEdit }: { rows: EmailRow[]; tot
           <span className="text-[12.5px] text-fg-2">{fmtNum(total)} approved email{total === 1 ? "" : "s"} ready</span>
           <span className="ml-auto flex gap-1.5">
             {sel.size ? <Button size="xs" disabled={pending} onClick={() => run(() => queueEmailsAction([...sel]), () => setSel(new Set()))}><Clock /> Queue {sel.size} selected</Button> : null}
+            {sel.size ? (
+              <Button size="xs" variant="primary" loading={pending && sending === "bulk"} disabled={pending}
+                onClick={() => { if (!window.confirm(`Send ${sel.size} email${sel.size === 1 ? "" : "s"} now?`)) return; setSending("bulk"); run(() => sendEmailsNowAction([...sel]), () => { setSel(new Set()); setSending(null); }); }}>
+                <Send /> Send {sel.size} now
+              </Button>
+            ) : null}
             <Button size="xs" variant="primary" disabled={pending || !total} onClick={() => run(() => queueEmailsAction("all_approved"))}><Clock /> Queue all {fmtNum(total)}</Button>
           </span>
         </div>

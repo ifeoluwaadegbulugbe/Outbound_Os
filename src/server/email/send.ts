@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { sql, json, withSystem, withWorkspace, type Q } from "../db";
+import { sql, json, textArray, withSystem, withWorkspace, type Q } from "../db";
 import type { ActorCtx } from "../services/audit";
 import { audit, notify } from "../services/audit";
 import { applySentEffects, loadDraftContext, revalidate, senderUsage } from "../services/outreach";
 import { suppressProspects } from "../services/dnc";
 import { effectiveDailyCap } from "../domain/channels";
 import { appUrl } from "../services/links";
-import { sendEmail, ProviderSendError, type SenderAccount, type Run } from "./providers";
+import { sendEmail, ProviderSendError, testSinkEnabled, type SenderAccount, type Run } from "./providers";
 import { footer } from "./mime";
 import { getEmailSettings, campaignReadiness, recipientEligibility, type EmailSettings } from "./policy";
 import { verifyAndStore } from "./enrich";
@@ -63,14 +63,20 @@ async function sentToday(q: Q, accountId: string): Promise<number> {
     and sent_at >= date_trunc('day', now() at time zone 'Africa/Lagos') at time zone 'Africa/Lagos'`);
 }
 
+/** Mailbox providers that can send here; the dev test sink only where it's enabled (never in production). */
+function sendingProviders(): string[] {
+  return testSinkEnabled() ? ["gmail", "microsoft", "test_sink"] : ["gmail", "microsoft"];
+}
+
 async function pickAccount(q: Q, preferred: (string | null)[]): Promise<EmailAccountRow | null> {
   for (const id of preferred) {
     if (!id) continue;
-    const a = await q.maybe<EmailAccountRow>(sql`select ${ACCOUNT_COLS} from sender_accounts where id = ${id} and channel = 'email' and is_active`);
+    const a = await q.maybe<EmailAccountRow>(sql`select ${ACCOUNT_COLS} from sender_accounts where id = ${id} and channel = 'email' and is_active
+      and provider = any(${textArray(sendingProviders())})`);
     if (a) return a;
   }
   const all = await q.many<EmailAccountRow>(sql`select ${ACCOUNT_COLS} from sender_accounts
-    where channel = 'email' and is_active and provider in ('gmail','microsoft','test_sink') and status = 'active' order by last_sent_at nulls first`);
+    where channel = 'email' and is_active and provider = any(${textArray(sendingProviders())}) and status = 'active' order by last_sent_at nulls first`);
   for (const a of all) if ((await sentToday(q, a.id)) < accountCap(a)) return a;
   return all[0] ?? null;
 }
@@ -261,7 +267,7 @@ export async function dispatchQueuedEmails(workspaceId: string, now = new Date()
     where status = 'paused' and paused_reason like 'Daily limit%' and paused_at < date_trunc('day', now() at time zone 'Africa/Lagos') at time zone 'Africa/Lagos'`));
   const paused = await run((q) => q.value<boolean>(sql`select outreach_paused from workspaces where id = ${workspaceId}`));
   if (paused) return 0;
-  const accounts = await run((q) => q.many<EmailAccountRow>(sql`select ${ACCOUNT_COLS} from sender_accounts where channel = 'email' and is_active and status = 'active' and provider in ('gmail','microsoft','test_sink')`));
+  const accounts = await run((q) => q.many<EmailAccountRow>(sql`select ${ACCOUNT_COLS} from sender_accounts where channel = 'email' and is_active and status = 'active' and provider = any(${textArray(sendingProviders())})`));
   let sent = 0;
   for (const a of accounts) {
     const jitter = 1 + Math.random() * 0.5;
