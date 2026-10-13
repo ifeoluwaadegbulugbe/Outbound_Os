@@ -342,7 +342,8 @@ async function crawlOne(run: <T>(fn: (q: Q) => Promise<T>) => Promise<T>, worksp
     }
     for (const e of f.emails) await recordSourceEmail(q, workspaceId, r.id, e.email, "website", e.sourceUrl, e.email === primary);
     await q.exec(sql`update prospects set website_crawl_status = ${blocked ? "blocked" : f.emails.length ? "ok" : "no_email"}, website_crawl_error = null,
-      website_checked_at = now(), booking_url = coalesce(booking_url, ${normalizeUrl(f.bookingUrl)}), has_booking_link = case when ${Boolean(f.bookingUrl)} then true else has_booking_link end
+      website_checked_at = now(), booking_url = coalesce(booking_url, ${normalizeUrl(f.bookingUrl)}), has_booking_link = case when ${Boolean(f.bookingUrl)} then true else has_booking_link end,
+      instagram_handle = coalesce(instagram_handle, ${f.instagram}), tiktok_handle = coalesce(tiktok_handle, ${f.tiktok})
       where id = ${r.id}`);
   });
   if (f.emails.length && primary && !r.email) await checkEmail(run, r.id, primary, resolver);

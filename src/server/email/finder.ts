@@ -1,5 +1,5 @@
 import { extractEmails, rankEmails, isRoleAddress } from "./address";
-import { domainOf } from "../domain/normalize";
+import { domainOf, socialFromUrl } from "../domain/normalize";
 
 /**
  * Finds publicly listed business emails on a business's OWN website:
@@ -23,6 +23,21 @@ export interface FinderResult {
   bookingUrl: string | null;
   /** The site's own name (og:site_name or <title>), from the first page read. */
   siteName: string | null;
+  /** Instagram / TikTok profiles the site itself links to (header, footer, contact page). */
+  instagram: string | null;
+  tiktok: string | null;
+}
+
+/** First profile handle the page links to on a platform, from its own <a href>s. */
+function linkedProfile(html: string, platform: "instagram" | "tiktok"): string | null {
+  const re = platform === "instagram"
+    ? /href\s*=\s*["'](https?:\/\/(?:www\.)?(?:instagram\.com|instagr\.am)\/[^"'?#]+)/gi
+    : /href\s*=\s*["'](https?:\/\/(?:www\.)?tiktok\.com\/[^"'?#]+)/gi;
+  for (const m of html.matchAll(re)) {
+    const handle = socialFromUrl(m[1])?.handle;
+    if (handle && handle.length >= 2) return handle;
+  }
+  return null;
 }
 
 /** Business name from a page's og:site_name or title, minus "Home | " style noise. */
@@ -124,7 +139,7 @@ function findBookingLink(html: string, base: URL): string | null {
 }
 
 export async function findEmailsOnWebsite(website: string, fetcher: Fetcher = fetch): Promise<FinderResult> {
-  const result: FinderResult = { emails: [], pagesFetched: [], blockedByRobots: [], error: null, bookingUrl: null, siteName: null };
+  const result: FinderResult = { emails: [], pagesFetched: [], blockedByRobots: [], error: null, bookingUrl: null, siteName: null, instagram: null, tiktok: null };
   let start: URL;
   try {
     start = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
@@ -163,6 +178,8 @@ export async function findEmailsOnWebsite(website: string, fetcher: Fetcher = fe
       for (const f of extractEmails(page.text)) if (!found.has(f.email)) found.set(f.email, { sourceUrl: page.finalUrl, how: f.how });
       const base = new URL(page.finalUrl);
       result.bookingUrl ??= findBookingLink(page.text, base);
+      result.instagram ??= linkedProfile(page.text, "instagram");
+      result.tiktok ??= linkedProfile(page.text, "tiktok");
       if (result.pagesFetched.length === 1) result.siteName = siteNameFrom(page.text);
       if (result.pagesFetched.length === 1) for (const l of candidateLinks(page.text, base).slice(0, MAX_PAGES - 1)) queue.push(l);
       await new Promise((r) => setTimeout(r, 400)); // be gentle
@@ -174,4 +191,28 @@ export async function findEmailsOnWebsite(website: string, fetcher: Fetcher = fe
   result.emails = ranked.slice(0, 5).map((email) => ({ email, ...found.get(email)!, isRole: isRoleAddress(email) }));
   if (result.pagesFetched.length && !result.emails.length) result.error = null;
   return result;
+}
+
+/**
+ * Homepage-only pass for sites already checked for emails: which Instagram /
+ * TikTok profiles does the business link to? Respects robots.txt like the
+ * email finder; reads one page.
+ */
+export async function findLinkedProfiles(website: string, fetcher: Fetcher = fetch): Promise<{ instagram: string | null; tiktok: string | null; error: string | null }> {
+  let start: URL;
+  try {
+    start = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
+  } catch {
+    return { instagram: null, tiktok: null, error: "Invalid website URL" };
+  }
+  if (BLOCKED_HOSTS.test(start.hostname)) return { instagram: null, tiktok: null, error: "Not a business website" };
+  try {
+    const robots = await fetchText(`${start.origin}/robots.txt`, fetcher).catch(() => null);
+    if (robots?.ok && !robotsAllows(robots.text, start.pathname || "/")) return { instagram: null, tiktok: null, error: "Disallowed by robots.txt" };
+    const page = await fetchText(start.toString(), fetcher);
+    if (!page.ok) return { instagram: null, tiktok: null, error: `Website returned ${page.status}` };
+    return { instagram: linkedProfile(page.text, "instagram"), tiktok: linkedProfile(page.text, "tiktok"), error: null };
+  } catch (e) {
+    return { instagram: null, tiktok: null, error: e instanceof Error ? e.message : String(e) };
+  }
 }

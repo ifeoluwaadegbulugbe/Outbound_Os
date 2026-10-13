@@ -204,3 +204,20 @@ describe("Orbit fit: small businesses in the 20 target categories only", () => {
     expect(ok("immigration_consultant", "passport_and_visa_service", "Easy Visa Consult")).toBe(true);
   });
 });
+
+describe("linked social profiles on business websites", () => {
+  it("keeps the Instagram/TikTok profiles a site links to, not posts", async () => {
+    const { findLinkedProfiles, findEmailsOnWebsite } = await import("@/server/email/finder");
+    const html = `<html><head><title>Teni Lashes</title></head><body>
+      <a href="https://www.instagram.com/p/Cxyz123/">latest post</a>
+      <a href="https://instagram.com/tenilashes/">Instagram</a>
+      <a href='https://www.tiktok.com/@teni.lashes?lang=en'>TikTok</a>
+      <a href="mailto:hello@tenilashes.ng">Email us</a></body></html>`;
+    const fetcher = async (url: string) => new Response(url.endsWith("robots.txt") ? "User-agent: *\nAllow: /" : html,
+      { status: 200, headers: { "content-type": url.endsWith("robots.txt") ? "text/plain" : "text/html" } });
+    expect(await findLinkedProfiles("https://tenilashes.ng", fetcher)).toEqual({ instagram: "tenilashes", tiktok: "teni.lashes", error: null });
+    const full = await findEmailsOnWebsite("https://tenilashes.ng", fetcher);
+    expect(full.instagram).toBe("tenilashes");
+    expect(full.emails[0]?.email).toBe("hello@tenilashes.ng");
+  });
+});

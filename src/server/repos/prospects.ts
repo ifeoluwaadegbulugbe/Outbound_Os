@@ -15,6 +15,8 @@ export interface ProspectListParams {
   source?: string;
   /** found | none | needs_email | sendable | verified | unknown | catch_all | risky | invalid | unverified */
   email?: string;
+  /** instagram | instagram_no_email | tiktok */
+  social?: string;
   country?: string;
   filter?: FilterNode | null;
   sort?: string;
@@ -98,11 +100,19 @@ export function prospectWhere(p: ProspectListParams): SqlFragment {
     p.source ? sql`p.source = ${p.source}` : null,
     p.country ? sql`p.country = ${p.country.toUpperCase()}` : null,
     emailWhere(p.email),
+    socialWhere(p.social),
     p.campaign ? sql`exists (select 1 from campaign_prospects cp where cp.prospect_id = p.id and cp.campaign_id = ${p.campaign})` : null,
     stage ? raw(stage.where) : null,
     p.minIcp != null && !Number.isNaN(p.minIcp) ? sql`p.icp_score >= ${p.minIcp}` : null,
     p.filter ? compileFilter(p.filter) : null,
   ]);
+}
+
+function socialWhere(s: string | undefined): SqlFragment | null {
+  if (s === "instagram") return sql`p.instagram_handle is not null`;
+  if (s === "instagram_no_email") return sql`p.instagram_handle is not null and p.email is null`;
+  if (s === "tiktok") return sql`p.tiktok_handle is not null`;
+  return null;
 }
 
 const EMAIL_STATUSES = ["verified", "unknown", "catch_all", "risky", "invalid", "unverified"];
@@ -156,6 +166,7 @@ export function parseListParams(sp: Record<string, string | string[] | undefined
     stage: s("stage"),
     source: s("source"),
     email: s("email"),
+    social: s("social"),
     country: s("country"),
     minIcp: s("min_icp") ? Number(s("min_icp")) : undefined,
     filter: decodeFilter(s("f")),
@@ -170,6 +181,7 @@ export const DEFAULT_VIEWS: { key: string; name: string; params: Record<string, 
   { key: "all", name: "All prospects", params: {} },
   { key: "email-ready", name: "Email ready, not contacted", params: { email: "sendable", f: encodeFilter({ op: "and", children: [{ field: "contacted", cmp: "is_false" }] }), sort: "priority" } },
   { key: "needs-email", name: "Website, email not checked", params: { email: "needs_email" } },
+  { key: "instagram", name: "On Instagram", params: { social: "instagram", sort: "priority" } },
   { key: "verified", name: "Verified emails", params: { email: "verified" } },
   { key: "priority", name: "Top priority, not contacted", params: { f: encodeFilter({ op: "and", children: [{ field: "contacted", cmp: "is_false" }, { field: "do_not_contact", cmp: "is_false" }, { field: "priority_score", cmp: "gte", value: 60 }] }) } },
   { key: "lagos-high", name: "High-value Lagos prospects", params: { city: "Lagos", min_icp: "80" } },

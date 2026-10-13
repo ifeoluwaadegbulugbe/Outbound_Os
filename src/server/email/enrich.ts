@@ -76,7 +76,8 @@ export async function enrichProspectEmail(run: Run, workspaceId: string, prospec
   const now = new Date();
   await run(async (q) => {
     await q.exec(sql`update prospects set website_checked_at = ${now}, last_researched_at = ${now},
-      booking_url = coalesce(booking_url, ${found.bookingUrl}), has_booking_link = case when ${Boolean(found.bookingUrl)} then true else has_booking_link end
+      booking_url = coalesce(booking_url, ${found.bookingUrl}), has_booking_link = case when ${Boolean(found.bookingUrl)} then true else has_booking_link end,
+      instagram_handle = coalesce(instagram_handle, ${found.instagram}), tiktok_handle = coalesce(tiktok_handle, ${found.tiktok})
       where id = ${prospectId}`);
     for (const [i, f] of found.emails.entries()) {
       await q.exec(sql`insert into prospect_contacts (workspace_id, prospect_id, kind, value, is_primary, is_role, source, source_url, discovered_at, verification_status)

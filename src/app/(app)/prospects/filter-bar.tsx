@@ -90,6 +90,7 @@ export function ProspectFilterBar({
   if (params.min_icp) chips.push({ label: `ICP ≥ ${params.min_icp}`, clear: { min_icp: null } });
   if (params.source) chips.push({ label: `Source: ${params.source}`, clear: { source: null } });
   if (params.email) chips.push({ label: `Email: ${EMAIL_FILTERS.find((e) => e.key === params.email)?.label ?? params.email}`, clear: { email: null } });
+  if (params.social) chips.push({ label: { instagram: "Has Instagram", instagram_no_email: "Instagram, no email", tiktok: "Has TikTok" }[params.social] ?? params.social, clear: { social: null } });
   if (params.country) chips.push({ label: `Country: ${countries.find((c) => c.code === params.country)?.name ?? params.country}`, clear: { country: null } });
   if (filter) chips.push({ label: describeFilter(filter), clear: { f: null } });
 
@@ -103,6 +104,12 @@ export function ProspectFilterBar({
         <Select aria-label="Email" value={params.email ?? ""} onChange={(e) => push({ email: e.target.value || null })} className="w-auto min-w-[130px]">
           <option value="">Any email</option>
           {EMAIL_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </Select>
+        <Select aria-label="Social profile" value={params.social ?? ""} onChange={(e) => push({ social: e.target.value || null })} className="w-auto min-w-[130px]">
+          <option value="">Any social</option>
+          <option value="instagram">Has Instagram</option>
+          <option value="instagram_no_email">Instagram, no email</option>
+          <option value="tiktok">Has TikTok</option>
         </Select>
         {countries.length > 1 ? (
           <Select aria-label="Country" value={params.country ?? ""} onChange={(e) => push({ country: e.target.value || null })} className="w-auto min-w-[110px]">
