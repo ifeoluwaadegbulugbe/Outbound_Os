@@ -11,7 +11,7 @@ import { ProspectTable } from "./prospect-table";
 import { describeFilter } from "@/server/domain/filters";
 import { cn, fmtNum, withParams } from "@/lib/utils";
 
-export const metadata = { title: "Email Prospects" };
+export const metadata = { title: "Prospects" };
 
 export default async function ProspectsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireUser();
@@ -43,7 +43,7 @@ export default async function ProspectsPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader
-        title="Email Prospects"
+        title="Prospects"
         description={`${fmtNum(data.total)} ${data.total === 1 ? "prospect" : "prospects"}${params.filter ? ` · ${describeFilter(params.filter)}` : ""}`}
         actions={
           <>

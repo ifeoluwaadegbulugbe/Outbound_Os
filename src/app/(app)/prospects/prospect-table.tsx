@@ -34,6 +34,7 @@ export function ProspectTable({
   const [dncReason, setDncReason] = useState("manual");
   const [dncNote, setDncNote] = useState("");
   const [genChannel, setGenChannel] = useState("email");
+  const openGenerate = (channel: string) => { setGenChannel(channel); setDlg("generate"); };
 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const count = allMatching ? total : selected.size;
@@ -82,7 +83,8 @@ export function ProspectTable({
             </button>
           ) : null}
           <div className="ml-auto flex flex-wrap gap-1.5">
-            <Button size="xs" variant="primary" onClick={() => setDlg("generate")}><MessageSquarePlus /> Generate email drafts</Button>
+            <Button size="xs" variant="primary" onClick={() => openGenerate("email")}><MessageSquarePlus /> Draft emails</Button>
+            <Button size="xs" variant="primary" onClick={() => openGenerate("instagram")}><AtSign /> Draft Instagram DMs</Button>
             <Button size="xs" onClick={() => run(() => findEmailsAction(selection()))} loading={pending && dlg === null}><MailSearch /> Find emails</Button>
             <Button size="xs" onClick={() => run(() => verifyEmailsAction(selection()))} loading={pending && dlg === null}><MailCheck /> Verify</Button>
             <Button size="xs" onClick={() => setDlg("campaign")} disabled={!campaigns.length}><Target /> Add to campaign</Button>
@@ -200,7 +202,7 @@ export function ProspectTable({
       </Dialog>
 
       <Dialog open={dlg === "generate"} onClose={() => setDlg(null)} title={`Generate messages for ${fmtNum(count)}`}
-        description="Drafts are generated in the background, validated, and land in Send Queue → Review. Nothing is sent until you approve it. Prospects without a usable email are skipped for email."
+        description="Drafts are generated in the background, validated, and land in Send Queue → Review. Nothing is sent until you approve it. Businesses without that channel (no email, or no Instagram handle) are skipped."
         footer={<><Button variant="ghost" onClick={() => setDlg(null)}>Cancel</Button><Button variant="primary" loading={pending} onClick={() => run(async () => {
           const r = await generateMessagesAction({ selection: selection(), channel: genChannel, campaignId: params.campaign ?? null });
           if (r.ok) router.push("/outreach");

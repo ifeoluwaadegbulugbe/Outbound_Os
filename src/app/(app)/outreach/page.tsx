@@ -89,7 +89,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     { key: "ready", label: "Ready to send", count: data.counts.ready },
     { key: "queued", label: "Queued", count: data.counts.queued },
     { key: "sent", label: "Sent", count: null },
-    { key: "social", label: "Social DMs", count: data.counts.send },
+    { key: "social", label: "Instagram & DMs", count: data.counts.send },
   ];
   const activeEmail = data.emailAccounts.filter((a) => a.status === "active");
   const capLeft = activeEmail.reduce((n, a) => n + Math.max(0, a.cap - a.sent_today), 0);
@@ -99,7 +99,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="Send Queue"
-        description="Review drafts, then send emails one by one or queue them. Queued emails go out paced within each mailbox's limits. Social DMs are sent by you in each app."
+        description="Review drafts, then send emails one by one or queue them. Queued emails go out paced within each mailbox's limits. Instagram and other DMs open with the message typed in, and you press Send in the app."
         actions={<LinkButton href="/prospects?view=priority" size="sm"><Send /> Draft more messages</LinkButton>}
       >
         <nav className="-mb-3 flex gap-1 overflow-x-auto" aria-label="Send queue sections">
