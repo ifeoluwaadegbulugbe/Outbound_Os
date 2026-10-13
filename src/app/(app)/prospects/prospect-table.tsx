@@ -85,6 +85,7 @@ export function ProspectTable({
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button size="xs" variant="primary" onClick={() => openGenerate("email")}><MessageSquarePlus /> Draft emails</Button>
             <Button size="xs" variant="primary" onClick={() => openGenerate("instagram")}><AtSign /> Draft Instagram DMs</Button>
+            <Button size="xs" onClick={() => openGenerate("tiktok")}><Music2 /> Draft TikTok DMs</Button>
             <Button size="xs" onClick={() => run(() => findEmailsAction(selection()))} loading={pending && dlg === null}><MailSearch /> Find emails</Button>
             <Button size="xs" onClick={() => run(() => verifyEmailsAction(selection()))} loading={pending && dlg === null}><MailCheck /> Verify</Button>
             <Button size="xs" onClick={() => setDlg("campaign")} disabled={!campaigns.length}><Target /> Add to campaign</Button>
