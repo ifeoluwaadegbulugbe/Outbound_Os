@@ -15,6 +15,21 @@ const countries = (arg("--countries") ?? "NG").split(",").map((c) => c.trim().to
 const limit = Number(arg("--limit") ?? 50_000);
 const concurrency = Number(arg("--concurrency") ?? 8);
 
+// A website dropping its connection mid-read surfaces as a stray socket error; it must not stop the run.
+process.on("uncaughtException", (e) => console.error(`ignored: ${e instanceof Error ? e.message : e}`));
+process.on("unhandledRejection", (e) => console.error(`ignored: ${e instanceof Error ? e.message : e}`));
+
+async function retry<T>(fn: () => Promise<T>, tries = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= tries) throw e;
+      await new Promise((r) => setTimeout(r, 2_000 * i));
+    }
+  }
+}
+
 const workspaces = await withSystem((q) => q.many<{ id: string }>(sql`select id from workspaces`));
 for (const w of workspaces) {
   const run = <T>(fn: Parameters<typeof withWorkspace<T>>[1]) => withWorkspace({ workspaceId: w.id }, fn);
@@ -30,7 +45,7 @@ for (const w of workspaces) {
     for (let r = queue.shift(); r; r = queue.shift()) {
       const f = await findLinkedProfiles(r.website);
       if (f.instagram || f.tiktok) {
-        await run((q) => q.exec(sql`update prospects set instagram_handle = coalesce(instagram_handle, ${f.instagram}), tiktok_handle = coalesce(tiktok_handle, ${f.tiktok}) where id = ${r!.id}`));
+        await retry(() => run((q) => q.exec(sql`update prospects set instagram_handle = coalesce(instagram_handle, ${f.instagram}), tiktok_handle = coalesce(tiktok_handle, ${f.tiktok}) where id = ${r!.id}`)));
         if (f.instagram) ig++;
         if (f.tiktok) tt++;
       }
