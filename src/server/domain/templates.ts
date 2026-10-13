@@ -106,10 +106,23 @@ export function noDashes(text: string): string {
     .replace(/^,\s*/gm, "");
 }
 
-/** Where we can honestly say we saw them. */
-function seenOn(p: TemplateProspect, channel: Channel): string {
-  return channel === "instagram" || channel === "tiktok" || channel === "facebook" ? "your page" : "your business online";
+/** Categories whose work is visual, where "your nails look so good" is a natural compliment. */
+const VISUAL = new Set([
+  "hair_stylist", "beauty_salon", "barber", "nail_technician", "lash_technician", "makeup_artist", "skincare", "spa_wellness",
+  "photographer", "media_production", "event_planner", "caterer", "fashion_designer", "designer", "tattoo_artist", "henna_artist",
+  "personal_stylist", "florist", "cake_designer", "fitness_trainer",
+]);
+
+/** "your lash work" / "your nails" for their category, or "your work". */
+export function craftPhrase(category: string | null | undefined): string {
+  return CRAFT[category ?? ""] ?? "your work";
 }
+
+/** The five house message variants, by angle; drafts rotate through them when no angle is chosen. */
+export const HOUSE_ANGLES = ["curiosity", "founder", "problem_first", "feedback_request", "product_intro"] as const;
+
+const EMOJI = /\s*\p{Extended_Pictographic}[\u{FE0F}\u{200D}\p{Extended_Pictographic}]*/gu;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function templateMessage(input: TemplateInput): TemplateOutput {
   const { prospect: p, angle, channel, productName } = input;
@@ -117,62 +130,84 @@ export function templateMessage(input: TemplateInput): TemplateOutput {
   const vps = (input.valueProps?.length ? input.valueProps : CATEGORY_VALUE_PROPS[p.category ?? "other_service"] ?? ["bookings", "clients"]) as ValuePropKey[];
   const vp1 = VALUE_PROPS[vps[0]]?.short ?? VALUE_PROPS.bookings.short;
   const name = greetingName(p);
-  const hi = name ? `Hi ${name}` : "Hi there";
+  const email = channel === "email";
   const sender = input.senderName ? input.senderName.split(" ")[0] : null;
   const smile = input.noEmojis ? "" : " 😊";
-  const craft = CRAFT[p.category ?? ""] ?? p.business_name;
-  const linkLine = input.link ? `
-
-${input.link}` : "";
-  let body: string;
+  const linkPara = input.link ? `\n\n${input.link}` : "";
+  const finish = (body: string, subject: string | null): TemplateOutput => {
+    let out = input.noEmojis ? body.replace(EMOJI, "") : body;
+    if (input.link && !out.includes(input.link)) out += linkPara;
+    // Email footer (sender identity, address, unsubscribe link) is appended at send time.
+    if (email && sender) out += `\n\n${sender}`;
+    out = noDashes(out.replace(/[ \t]+([,.?!])/g, "$1").replace(/[ \t]{2,}/g, " ")).replace(/\n{3,}/g, "\n\n").trim();
+    return { body: out, subject: email ? subject : null, valueProps: vps.slice(0, 1) };
+  };
 
   if (input.kind === "followup") {
+    const hi = name ? `Hi ${name}` : "Hi";
     const step = input.step ?? 1;
-    if (step === 1) body = pick([
-      `${hi}, just following up on my last message in case it got buried. Would you like me to send you the link to try ${productName}?${smile}`,
-      `${hi}, just checking in on my message from last week. Happy to send you the link to ${productName} if you'd like to take a look.${smile}`,
-    ], seed, "f1");
-    else if (step === 2) body = `${hi}, one more thing I think you'd like. With ${productName} you can ${vp1}, all in one place. If you want, I can help you set it up, it only takes a few minutes.${linkLine}`;
-    else body = `${hi}, I don't want to keep bugging you, so this will be my last message. If you ever want an easier way to ${vp1}, I'd be happy to share ${productName} with you. Wishing you a great month!${smile}`;
-    if (channel === "email" && sender) body += `
-
-${sender}`;
-    return { body: noDashes(body).trim(), subject: channel === "email" ? `Re: Quick question for ${name ?? p.business_name}` : null, valueProps: vps.slice(0, 1) };
+    const body = step === 1
+      ? pick([
+          `${hi}! Just following up on my last message in case it got buried.\n\nWould you like me to send you the link to try ${productName}?${smile}`,
+          `${hi}! Just checking in on my message from last week.\n\nHappy to send you the link to ${productName} if you'd like to take a look.${smile}`,
+        ], seed, "f1")
+      : step === 2
+        ? `${hi}! One more thing I think you'd like. With ${productName} you can ${vp1}, all in one place.\n\nIf you want, I can help you set it up, it only takes a few minutes.`
+        : `${hi}! I don't want to keep bugging you, so this will be my last message.\n\nIf you ever want an easier way to ${vp1}, I'd be happy to share ${productName} with you. Wishing you a great month!${smile}`;
+    return finish(body, `Re: Quick question for ${name ?? p.business_name}`);
   }
 
-  const opener = pick([
-    `${hi}, I came across ${name ? seenOn(p, channel) : p.business_name} and I love what you're doing with ${craft}.`,
-    `${hi}, I came across ${name ? seenOn(p, channel) : p.business_name} and I really like what you're doing with ${craft}.`,
-  ], seed, "o");
-  const pitch = `${sender ? `I'm ${sender} and I'm building` : "I'm building"} ${productName}, a simple tool that helps service business owners manage bookings, clients, payments and follow-ups in one place.`;
-  const middle = angle === "feedback_request"
-    ? "I'm getting a few business owners to try it out, and I'd really love your honest feedback on it."
-    : pick([
-        "I'm currently getting a few business owners to try it out, and I thought it could be useful for your business too.",
-        `I'm getting a small group of business owners to try it out right now, and I thought it could really help ${p.business_name}.`,
-      ], seed, "m");
-  const offer = input.offer ? `${input.offer.replace(/[.!]?$/, ".")} ` : "";
-  const close = pick([
-    `Would you be open to me sharing the link with you?${smile}`,
-    `Would you like me to send you the link so you can check it out?${smile}`,
-  ], seed, "c");
+  // Greetings and where we saw them, per channel: DMs say "your page"; emails can't.
+  const hey = email ? (name ? `Hi ${name}` : "Hi") : name ? `Heyyyy ${name}` : "Heyyyy";
+  const hi = name ? `Hi ${name}` : "Hi";
+  const came = email ? "came across your business online" : "came across your page";
+  const stumbled = email ? "came across your business online" : "stumbled on your page";
+  const browsing = email ? "was looking at your business online" : "was going through your page";
+  const craft = craftPhrase(p.category);
+  const visual = VISUAL.has(p.category ?? "");
+  const plural = /s$/.test(craft);
+  const looksGood = visual ? `${craft} ${plural ? "look" : "looks"} so good!` : `${craft} really stood out to me.`;
+  const offer = input.offer ? `\n\n${input.offer.replace(/[.!]?$/, ".")}` : "";
+  const chosen = (HOUSE_ANGLES as readonly string[]).includes(angle) ? angle
+    : angle === "outcome" || angle === "social_proof" ? "product_intro"
+    : pick(HOUSE_ANGLES, seed, "angle");
 
-  body = `${opener} ${pitch}
+  let body: string;
+  switch (chosen) {
+    case "curiosity": // 1. Feedback-first
+      body = `${hey}! I ${came} and I really like your work, ${looksGood}
 
-${middle}
+I'm actually working on something for service business owners and I'd love to get your perspective on something. I'm building ${productName} to help with things like managing clients, bookings and payments, and I'm curious how business owners currently handle all of that.${offer}
 
-${offer}${close}`;
-  if (input.link && !body.includes(input.link)) body += linkLine;
-  // Email footer (sender identity, address, unsubscribe link) is appended at send time.
-  if (channel === "email") body += `
+How's it been for you so far?`;
+      break;
+    case "founder": // 2. Founder reaching out to a potential user
+      body = `${hi}! I ${came} and I love how you showcase your work. ${cap(craft)} caught my attention.
 
-Thanks,
-${sender ?? `The ${productName} team`}`;
-  return {
-    body: noDashes(body.replace(/\s+([,.?!])/g, "$1").replace(/ {2,}/g, " ")).trim(),
-    subject: channel === "email" ? `Quick question for ${name ?? p.business_name}` : null,
-    valueProps: vps.slice(0, 1),
-  };
+I'm the founder of ${productName}, an app I'm building for service business owners. The idea came from wanting to make the business side of things a little easier, especially keeping track of clients, bookings and payments.${offer}
+
+I'm curious, how do you currently manage all of that for your business?`;
+      break;
+    case "problem_first": // 3. Problem-first
+      body = `${hey}! ${visual ? `${cap(craft)} ${plural ? "are" : "is"} so neat omg 😭❤️ I ${browsing} and had to ask` : `I ${browsing} and I love what you're doing with ${craft}. Had to ask`}, how do you keep track of all your bookings? Especially when people are messaging you on different platforms.
+
+I'm building ${productName}, which helps you manage your bookings, clients and payments in one place. I started thinking about how stressful it can get when everything is scattered across chats, so I'm curious how you handle yours!${offer}`;
+      break;
+    case "feedback_request": // 4. Asking for product feedback
+      body = `${hi}! I ${stumbled} and I really like what you're doing with ${craft}. It's always nice seeing people put so much care into their work.
+
+I'm currently building ${productName}, a tool that helps service business owners organise their bookings, clients, payments and follow-ups. I'm trying to get feedback from people who actually run these kinds of businesses so I can make it genuinely useful.${offer}
+
+Would you be open to having a look at it sometime? I'd really appreciate your honest thoughts.`;
+      break;
+    default: // 5. Inviting them to try Orbit
+      body = `${hey}! I just ${came} and ${visual ? `${craft} ${plural ? "are" : "is"} beautiful! 🥹❤️` : `I love what you're doing with ${craft}!`}
+
+I'm building something called ${productName} for service business owners, to make it easier to keep track of clients, bookings and payments without having to jump between different chats and apps.
+
+I'm looking for a few business owners to try it out, and I thought it could be useful for you too.${offer} Would you be open to checking it out?`;
+  }
+  return finish(body, `Quick question for ${name ?? p.business_name}`);
 }
 
 /** Suggested responses to common reply intents (fallback for the AI reply assistant). */

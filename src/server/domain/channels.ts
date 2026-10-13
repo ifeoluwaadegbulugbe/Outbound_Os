@@ -29,7 +29,7 @@ export interface ChannelSpec {
 
 export const CHANNEL_SPECS: Record<Channel, ChannelSpec> = {
   instagram: {
-    key: "instagram", label: "Instagram", mode: "assisted", prefill: "extension", maxChars: 1000, idealChars: 450,
+    key: "instagram", label: "Instagram", mode: "assisted", prefill: "extension", maxChars: 1000, idealChars: 520,
     defaultDailyCap: 80, requiresOptOutLine: false, needs: "instagram_handle",
     note: "No official API for starting DMs. The browser extension opens the DM and fills the draft; you press Send.",
   },
@@ -39,7 +39,7 @@ export const CHANNEL_SPECS: Record<Channel, ChannelSpec> = {
     note: "No messaging API. The extension opens the profile; click Message and the draft fills in; you press Send.",
   },
   whatsapp: {
-    key: "whatsapp", label: "WhatsApp", mode: "assisted", prefill: "url", maxChars: 1000, idealChars: 450,
+    key: "whatsapp", label: "WhatsApp", mode: "assisted", prefill: "url", maxChars: 1000, idealChars: 520,
     defaultDailyCap: 80, requiresOptOutLine: false, needs: "phone",
     note: "wa.me opens the chat with the message pre-typed; you press Send. The Cloud API needs opt-in, so it isn't used for first contact.",
   },
@@ -54,7 +54,7 @@ export const CHANNEL_SPECS: Record<Channel, ChannelSpec> = {
     note: "Messaging API is partner-only. Copy the message, open the profile, send manually.",
   },
   facebook: {
-    key: "facebook", label: "Facebook", mode: "manual", prefill: "none", maxChars: 1000, idealChars: 450,
+    key: "facebook", label: "Facebook", mode: "manual", prefill: "none", maxChars: 1000, idealChars: 520,
     defaultDailyCap: 30, requiresOptOutLine: false, needs: "facebook_url",
     note: "Messenger API can't start conversations. Copy, open, send manually.",
   },

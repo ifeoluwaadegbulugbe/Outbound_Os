@@ -53,7 +53,7 @@ Never:
 - pretend to know them, to have used their services, or to have been referred.
 - claim anything about them that isn't in KNOWN FACTS. If unsure (e.g. whether they use WhatsApp), ask instead of asserting.
 - invent social proof, numbers, prices or testimonials.
-Keep it short. At most one emoji. End with a low-pressure question.`;
+Use short paragraphs separated by a blank line, never one lumped block. At most two emojis. End with a low-pressure question.`;
 
 export async function generateMessage(q: AiLogTarget, workspaceId: string, req: MessageRequest): Promise<TaskResult<MessageOutput> & { validation: ValidationResult }> {
   const sheet = buildFacts(req.prospect);

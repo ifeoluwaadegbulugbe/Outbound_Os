@@ -2,7 +2,7 @@ import { CATEGORIES } from "./taxonomy";
 import { CHANNEL_SPECS, channelAvailable, type ContactTarget } from "./channels";
 import type { Channel, ProspectStatus } from "./taxonomy";
 import { outreachBlockReason } from "./status";
-import { greetingName } from "./templates";
+import { greetingName, craftPhrase } from "./templates";
 
 /**
  * Pre-send quality and safety gate. Every outreach message is validated on
@@ -179,7 +179,9 @@ export function validateMessage(input: ValidationInput): ValidationResult {
   const nameTokens = [p.first_name, p.owner_name?.split(" ")[0], greetingName({ ...p, id: "", city: null, first_name: p.first_name ?? null }), p.business_name, p.instagram_handle, p.tiktok_handle]
     .filter(Boolean)
     .map((s) => s!.toLowerCase());
-  const personalized = nameTokens.some((n) => n.length >= 3 && lower.includes(n));
+  // Naming what they do ("your lash work") is personal too; generic "your work" isn't.
+  const craft = craftPhrase(p.category);
+  const personalized = nameTokens.some((n) => n.length >= 3 && lower.includes(n)) || (craft !== "your work" && lower.includes(craft));
   if (!personalized && input.kind === "initial") {
     if (c.requireName) block("not_personalized", "Campaign requires using their name or business name.");
     else warn("not_personalized", "Doesn't mention their name or business — feels like a mass message.");

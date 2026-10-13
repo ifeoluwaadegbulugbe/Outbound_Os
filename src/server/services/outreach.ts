@@ -8,6 +8,7 @@ import { valuePropsFor } from "./scoring-service";
 import { audit, logEvent, notify, type ActorCtx } from "./audit";
 import { createTrackedLink } from "./links";
 import { DEFAULT_FOLLOWUP_STEPS } from "./workspace-defaults";
+import { HOUSE_ANGLES } from "../domain/templates";
 
 // Email-first: email when the prospect has a usable address, then social channels.
 export const DEFAULT_CHANNEL_ORDER: Channel[] = ["email", "instagram", "whatsapp", "tiktok"];
@@ -84,7 +85,8 @@ export function planDraft(ctx: DraftContext, opts: { channel?: string | null; an
   const order = opts.channel && opts.channel !== "auto" ? [opts.channel] : ctx.campaign?.channels?.length ? ctx.campaign.channels : DEFAULT_CHANNEL_ORDER;
   const channel = pickChannel(order, p);
   if (!channel) return { skip: opts.channel && opts.channel !== "auto" ? `no ${opts.channel} contact` : "no contact channel" };
-  let angle = opts.angle ?? p.recommended_message_angle ?? "curiosity";
+  // No angle chosen: rotate through the house variants so a batch doesn't all read the same.
+  let angle = opts.angle ?? p.recommended_message_angle ?? hashPick([...HOUSE_ANGLES], p.id);
   let variantId: string | null = null;
   if (!opts.angle && ctx.variants.length) {
     const v = hashPick(ctx.variants, p.id);
