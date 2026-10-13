@@ -34,7 +34,7 @@ export function InstagramConnect({ connected, username, canEdit }: { connected: 
       <ol className="list-decimal space-y-1.5 pl-4 text-[12.5px] text-fg-2">
         <li>Make Orbit&apos;s Instagram a <b>Business</b> or <b>Creator</b> account and link it to a Facebook Page (Instagram app → Settings → Account type).</li>
         <li>At <span className="font-mono text-[12px]">developers.facebook.com</span>, create a free app (type “Business”) and add the <b>Instagram</b> product (API setup with Facebook login).</li>
-        <li>In Graph API Explorer, generate a token with <span className="font-mono text-[11.5px]">instagram_basic, pages_show_list, pages_read_engagement, business_management</span>. Exchange it for a long-lived (60-day) token.</li>
+        <li>In Graph API Explorer, generate a token with <span className="font-mono text-[11.5px]">instagram_basic, instagram_manage_insights, pages_show_list, pages_read_engagement, business_management</span> (plus <span className="font-mono text-[11.5px]">ads_read</span> if your Page is in a Business portfolio). Exchange it for a long-lived (60-day) token.</li>
         <li>Find your Instagram account ID: <span className="font-mono text-[11.5px]">GET /me/accounts?fields=instagram_business_account</span>.</li>
         <li>Paste both below. As the app&apos;s only user it usually works in development mode; hashtag search may require Meta App Review — see docs/integrations.md.</li>
       </ol>
