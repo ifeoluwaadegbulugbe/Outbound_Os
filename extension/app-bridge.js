@@ -1,6 +1,8 @@
 // Runs on the Outbound OS web app. Announces the extension and relays
 // "open this conversation" requests from the Send session to the background.
 (() => {
+  if (window.__obBridge) return; // registered script and a re-injection can both run
+  window.__obBridge = true;
   document.documentElement.dataset.obExtension = "1";
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== location.origin) return;

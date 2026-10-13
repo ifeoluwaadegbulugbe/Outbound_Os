@@ -64,6 +64,38 @@ async function next(channel) {
   return openMessage(r.message);
 }
 
+/**
+ * The bridge script on a deployed app URL is registered at runtime (options
+ * page), and Chrome drops runtime-registered scripts when the extension is
+ * reloaded or updated. Re-register it whenever the worker starts, and inject
+ * it into app tabs that are already open, so "Send" keeps reaching us.
+ */
+async function ensureBridge() {
+  const { appUrl } = await settings();
+  let origin;
+  try {
+    origin = new URL(appUrl).origin;
+  } catch {
+    return;
+  }
+  if (/^http:\/\/(localhost|127\.0\.0\.1)/.test(origin)) return; // covered by the manifest
+  const pattern = `${origin}/*`;
+  if (!(await chrome.permissions.contains({ origins: [pattern] }))) return;
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: ["app-bridge-custom"] });
+  if (!existing.length) {
+    await chrome.scripting.registerContentScripts([{ id: "app-bridge-custom", matches: [pattern], js: ["app-bridge.js"], runAt: "document_start" }]);
+  } else if (existing[0].matches?.[0] !== pattern) {
+    await chrome.scripting.updateContentScripts([{ id: "app-bridge-custom", matches: [pattern] }]);
+  }
+  for (const tab of await chrome.tabs.query({ url: pattern })) {
+    chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["app-bridge.js"] }).catch(() => {});
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => ensureBridge().catch(() => {}));
+chrome.runtime.onStartup.addListener(() => ensureBridge().catch(() => {}));
+ensureBridge().catch(() => {});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     try {

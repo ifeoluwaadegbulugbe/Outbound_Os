@@ -43,7 +43,12 @@ export function SendSession({ items, usage }: { items: SendItem[]; usage: Sender
   const item = queue[Math.min(idx, queue.length - 1)];
   const [body, setBody] = useState(item?.body ?? "");
 
-  useEffect(() => setHasExt(extensionPresent()), []);
+  // The extension can connect after the page loads (e.g. right after it's reloaded), so keep checking.
+  useEffect(() => {
+    setHasExt(extensionPresent());
+    const t = setInterval(() => setHasExt(extensionPresent()), 2000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     setBody(item?.body ?? "");
     setOpened(false);
@@ -190,9 +195,13 @@ export function SendSession({ items, usage }: { items: SendItem[]; usage: Sender
         </div>
         {spec.prefill === "extension" && !hasExt ? (
           <div className="rounded-lg border border-border bg-surface p-4 text-[12.5px] shadow-sm">
-            <p className="flex items-center gap-1.5 font-medium"><Puzzle className="size-4" /> Skip the pasting</p>
-            <p className="mt-1 text-fg-3">The Outbound OS browser extension opens each DM with your message already typed — you just press Send.</p>
-            <Link href="/integrations#browser_extension" className="mt-2 inline-block underline">Install the extension</Link>
+            <p className="flex items-center gap-1.5 font-medium text-warning"><Puzzle className="size-4" /> Extension not connected to this page</p>
+            <p className="mt-1 text-fg-3">Without it, the message is copied for you to paste (Ctrl+V) in the chat. To have it typed in automatically:</p>
+            <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-fg-3">
+              <li>Right-click the extension icon → <b>Options</b> → <b>Save &amp; test</b>.</li>
+              <li>Refresh this page.</li>
+            </ol>
+            <Link href="/integrations#browser_extension" className="mt-2 inline-block underline">Not installed yet? Set it up</Link>
           </div>
         ) : null}
         <div className="rounded-lg border border-border bg-surface p-4 text-[12px] text-fg-3 shadow-sm">
