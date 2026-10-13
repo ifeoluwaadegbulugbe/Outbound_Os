@@ -70,7 +70,7 @@ export async function approveAllReadyAction(batchId: string | null): Promise<Act
   const user = await requireUser("member");
   const ids = await asUser(user, (q) => q.many<{ id: string }>(batchId
     ? sql`select id from outreach_messages where status = 'needs_review' and batch_id = ${batchId} limit 1000`
-    : sql`select id from outreach_messages where status = 'needs_review' and (validation->'issues') = '[]'::jsonb limit 1000`));
+    : sql`select id from outreach_messages where status = 'needs_review' limit 1000`));
   if (!ids.length) return { ok: false, error: "Nothing ready to approve." };
   return approveAction(ids.map((r) => r.id));
 }

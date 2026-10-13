@@ -107,7 +107,7 @@ export function ReviewList({ items, canEdit, batchId, totalReady, totalBlocked }
             ) : null}
             {ready.length > 0 ? (
               <Button size="sm" variant="primary" loading={pending} onClick={() => act(() => approveAllReadyAction(batchId))}>
-                <CheckCheck /> Approve all {batchId ? "in batch" : "clean"} drafts
+                <CheckCheck /> Approve all {batchId ? "in batch" : fmtNum(totalReady ?? ready.length)}
               </Button>
             ) : null}
           </div>
