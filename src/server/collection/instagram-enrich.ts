@@ -19,8 +19,8 @@ export async function instagramConnected(workspaceId: string): Promise<boolean> 
     Boolean(await q.value<boolean>(sql`select status = 'connected' and secret_ciphertext is not null from integrations where key = 'instagram_graph'`)));
 }
 
-export async function runInstagramEnrichTick(workspaceId: string, opts: { budgetMs?: number; batch?: number; countries?: string[]; log?: (m: string) => void } = {}): Promise<{ checked: number; emails: number; websites: number }> {
-  const out = { checked: 0, emails: 0, websites: 0 };
+export async function runInstagramEnrichTick(workspaceId: string, opts: { budgetMs?: number; batch?: number; countries?: string[]; log?: (m: string) => void } = {}): Promise<{ checked: number; emails: number; websites: number; tiktoks: number }> {
+  const out = { checked: 0, emails: 0, websites: 0, tiktoks: 0 };
   if (!(await instagramConnected(workspaceId))) return out;
   const run = <T>(fn: (q: Q) => Promise<T>) => withWorkspace({ workspaceId }, fn);
   const ctx = { workspaceId, ws: run, progress: async () => true, log: async () => {} };
@@ -30,10 +30,10 @@ export async function runInstagramEnrichTick(workspaceId: string, opts: { budget
   while (Date.now() < deadline) {
     const rows = await run((q) => q.many<{ id: string; instagram_handle: string; website: string | null }>(sql`
       select id, instagram_handle, website from prospects
-      where merged_into is null and archived_at is null and not is_demo and not do_not_contact and email is null and instagram_handle is not null
+      where merged_into is null and archived_at is null and not is_demo and not do_not_contact and instagram_handle is not null
         and (instagram_checked_at is null or instagram_checked_at < now() - interval '90 days')
         and country = any(${`{${countries.join(",")}}`}::text[])
-      order by (country = 'NG') desc, priority_score desc nulls last limit ${opts.batch ?? 20}`));
+      order by (email is null) desc, (country = 'NG') desc, priority_score desc nulls last limit ${opts.batch ?? 20}`));
     if (!rows.length) break;
     for (const r of rows) {
       if (Date.now() >= deadline) break;
@@ -58,6 +58,11 @@ export async function runInstagramEnrichTick(workspaceId: string, opts: { budget
           for (const [i, e] of emails.entries()) await recordSourceEmail(q, workspaceId, r.id, e, "instagram_bio", profileUrl, i === 0);
           out.emails++;
         }
+        const tiktok = tiktokFromBio(`${bd?.biography ?? ""} ${bd?.website ?? ""}`);
+        if (tiktok) {
+          const set = await q.maybe(sql`update prospects set tiktok_handle = ${tiktok} where id = ${r.id} and tiktok_handle is null returning id`);
+          if (set) out.tiktoks++;
+        }
         const site = normalizeUrl(bd?.website ?? null);
         if (site && !r.website && !/instagram\.com|linktr\.ee|facebook\.com|wa\.me/i.test(site)) {
           await q.exec(sql`update prospects set website = ${site}, website_domain = ${domainOf(site)}, website_crawl_status = null where id = ${r.id} and website is null`);
@@ -67,7 +72,13 @@ export async function runInstagramEnrichTick(workspaceId: string, opts: { budget
       });
       out.checked++;
     }
-    opts.log?.(`instagram: ${out.checked} profiles read · ${out.emails} emails from bios · ${out.websites} new websites`);
+    opts.log?.(`instagram: ${out.checked} profiles read · ${out.emails} emails from bios · ${out.websites} new websites · ${out.tiktoks} TikTok handles`);
   }
   return out;
+}
+
+/** A TikTok handle the owner put in their bio or link: "tiktok.com/@x", "TikTok: @x", "TT - @x". */
+export function tiktokFromBio(text: string): string | null {
+  const m = /tiktok\.com\/@([a-z0-9._]{2,24})/i.exec(text) ?? /\b(?:tiktok|tik tok|tt)\s*[:\-–|]?\s*@([a-z0-9._]{2,24})/i.exec(text);
+  return m ? m[1].replace(/\.+$/, "").toLowerCase() : null;
 }

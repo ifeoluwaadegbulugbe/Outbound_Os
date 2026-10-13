@@ -221,3 +221,13 @@ describe("linked social profiles on business websites", () => {
     expect(full.emails[0]?.email).toBe("hello@tenilashes.ng");
   });
 });
+
+describe("TikTok handles in Instagram bios", () => {
+  it("reads tiktok.com links and 'TikTok: @x' labels, nothing else", async () => {
+    const { tiktokFromBio } = await import("@/server/collection/instagram-enrich");
+    expect(tiktokFromBio("Lash tech in Lekki 💕 TikTok: @teni.lashes | DM to book")).toBe("teni.lashes");
+    expect(tiktokFromBio("https://www.tiktok.com/@GlamByKemi?lang=en")).toBe("glambykemi");
+    expect(tiktokFromBio("TT - @nailsbytolu.")).toBe("nailsbytolu");
+    expect(tiktokFromBio("Bookings: @mybookingpage on IG")).toBeNull();
+  });
+});
