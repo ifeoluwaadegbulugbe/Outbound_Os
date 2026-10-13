@@ -24,17 +24,39 @@
     return null;
   }
 
-  function fill(el, text) {
+  const squash = (s) => s.replace(/\s+/g, " ").trim();
+  // Line breaks survive if the editor shows each paragraph (it may render blank lines as empty blocks).
+  const kept = (el, text) => {
+    const shown = el.innerText.replace(/ /g, " ");
+    const lines = text.split("\n").filter((l) => l.trim());
+    return squash(shown) === squash(text) && shown.split("\n").filter((l) => l.trim()).length >= lines.length;
+  };
+
+  async function fill(el, text) {
     el.focus();
     if (el.tagName === "TEXTAREA") {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
       setter.call(el, text);
       el.dispatchEvent(new Event("input", { bubbles: true }));
-    } else {
-      // insertText goes through the editor's own input pipeline, like typing/pasting.
-      document.execCommand("selectAll", false);
-      document.execCommand("insertText", false, text);
+      return;
     }
+    // Rich editors (Instagram's) drop "\n" from insertText but keep paragraphs from a paste,
+    // so hand the text over as a paste through the editor's own paste handling.
+    document.execCommand("selectAll", false);
+    const data = new DataTransfer();
+    data.setData("text/plain", text);
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    if (kept(el, text)) return;
+    // Fallback: type line by line with a line break between lines (like Shift+Enter, never Enter/Send).
+    el.focus();
+    document.execCommand("selectAll", false);
+    document.execCommand("delete", false);
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
+      if (line) document.execCommand("insertText", false, line);
+      if (i < lines.length - 1) document.execCommand("insertLineBreak", false);
+    });
   }
 
   function showBar(state, pending) {
@@ -85,9 +107,8 @@
       if (filledFor === pending.id) return;
       const el = findComposer();
       if (el && (location.pathname.startsWith("/direct") || location.pathname.startsWith("/messages"))) {
-        fill(el, pending.text);
         filledFor = pending.id;
-        showBar("filled", pending);
+        fill(el, pending.text).then(() => showBar("filled", pending));
       } else {
         showBar("waiting", pending);
       }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Outbound OS Assistant",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Opens each approved DM with your message already typed. You press Send — it never sends for you.",
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": [
