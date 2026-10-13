@@ -21,7 +21,8 @@ for (const w of workspaces) {
   const total = { checked: 0, emails: 0, websites: 0, tiktoks: 0 };
   while (Date.now() < deadline) {
     const r = await runInstagramEnrichTick(w.id, { budgetMs: Math.min(30 * 60_000, deadline - Date.now()), countries, log: (m) => console.log(m) })
-      .catch((e) => { console.error(`lookup error: ${e instanceof Error ? e.message : e}`); return null; });
+      .catch((e) => { console.error(`lookup error: ${e instanceof Error ? e.message : e}`); return e instanceof Error && /not permitted/.test(e.message) ? "stop" as const : null; });
+    if (r === "stop") break;
     if (!r) { await new Promise((res) => setTimeout(res, 60_000)); continue; }
     for (const k of Object.keys(total) as (keyof typeof total)[]) total[k] += r[k];
     console.log(`total: ${total.checked} profiles · ${total.emails} emails · ${total.websites} websites · ${total.tiktoks} TikTok`);

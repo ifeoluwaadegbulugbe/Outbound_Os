@@ -43,12 +43,18 @@ export async function runInstagramEnrichTick(workspaceId: string, opts: { budget
         const res = await graph<BusinessDiscovery>(ctx, cfg, cfg.igUserId, { fields: `business_discovery.username(${handle}){username,name,biography,website}` });
         bd = res.business_discovery ?? null;
       } catch (e) {
-        // Personal (non-business) accounts and unknown handles aren't available through the API: mark and move on.
         const msg = e instanceof Error ? e.message : String(e);
-        if (/rate|limit|throttl|#4|#17|#32|#613/i.test(msg)) {
+        if (/rate|limit|throttl|#4\b|#17\b|#32\b|#613\b/i.test(msg)) {
           opts.log?.(`instagram: rate limit reached, pausing (${msg.slice(0, 120)})`);
           return out;
         }
+        // The app or token isn't allowed to call Business Discovery, so every lookup would fail:
+        // stop without marking anything checked.
+        if (/\(#(10|190|200)\)/.test(msg)) {
+          opts.log?.(`instagram: not permitted by Meta, stopping (${msg.replace(/access_token=[^&\s]+/g, "access_token=REDACTED").slice(0, 160)})`);
+          throw new Error(`Instagram lookup not permitted by Meta: ${msg.replace(/access_token=[^&\s]+/g, "access_token=REDACTED").slice(0, 200)}`);
+        }
+        // Personal (non-business) accounts and unknown handles aren't available through the API: mark and move on.
       }
       const profileUrl = `https://www.instagram.com/${handle}/`;
       await run(async (q) => {

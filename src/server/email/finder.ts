@@ -1,5 +1,5 @@
 import { extractEmails, rankEmails, isRoleAddress } from "./address";
-import { domainOf, socialFromUrl } from "../domain/normalize";
+import { domainOf, socialFromUrl, PLATFORM_HANDLES } from "../domain/normalize";
 
 /**
  * Finds publicly listed business emails on a business's OWN website:
@@ -35,7 +35,7 @@ function linkedProfile(html: string, platform: "instagram" | "tiktok"): string |
     : /href\s*=\s*["'](https?:\/\/(?:www\.)?tiktok\.com\/[^"'?#]+)/gi;
   for (const m of html.matchAll(re)) {
     const handle = socialFromUrl(m[1])?.handle;
-    if (handle && handle.length >= 2) return handle;
+    if (handle && handle.length >= 2 && !PLATFORM_HANDLES.has(handle.toLowerCase())) return handle;
   }
   return null;
 }

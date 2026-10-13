@@ -101,6 +101,17 @@ const BOOKING_HOSTS = [
 const PAYMENT_HOSTS = ["paystack.shop", "paystack.com", "flutterwave.com", "selar.co", "stan.store", "bumpa.shop"];
 const SCHEDULING_HOSTS = ["calendly.com", "fresha.com", "booksy.com", "setmore.com", "acuityscheduling.com", "vagaro.com", "tidycal.com", "zcal.co", "simplybook.me", "bookafy.com", "square.site"];
 
+/**
+ * Profiles that belong to platforms and site builders, not to the business
+ * whose website links them (footers often link WhatsApp, Wix, Fresha…).
+ */
+export const PLATFORM_HANDLES = new Set([
+  "whatsapp", "instagram", "facebook", "meta", "tiktok", "fresha", "wix", "wordpressdotcom", "wordpress", "squarespace", "shopify",
+  "godaddy", "yahoonews", "yahoo", "google", "youtube", "teepublic", "audiomack", "spotify", "linktree", "beacons", "selar", "paystack",
+  "flutterwave", "bumpa", "calendly", "booksy", "jumianigeria", "jumiangr", "jumia", "quicket_za", "lekkeslaap", "ancora_themes", "axiom_themes",
+  "themeforest", "envato", "elementor", "canva", "mailchimp",
+]);
+
 export function socialFromUrl(url: string): { platform: string; handle: string | null; url: string } | null {
   const domain = domainOf(url);
   if (!domain) return null;
@@ -114,7 +125,7 @@ export function socialFromUrl(url: string): { platform: string; handle: string |
     if (platform === "tiktok") handle = parts[0]?.startsWith("@") ? normalizeHandle(parts[0]) : null;
     else if (platform === "instagram") {
       const first = parts[0];
-      if (first && !["p", "reel", "reels", "explore", "stories", "tv", "accounts", "direct"].includes(first)) handle = normalizeHandle(first);
+      if (first && !["p", "reel", "reels", "explore", "stories", "tv", "accounts", "direct", "invites", "about", "legal", "developer", "web"].includes(first)) handle = normalizeHandle(first);
     } else if (platform === "linkedin") handle = parts[1] ?? null;
     else handle = parts[0] ? normalizeHandle(parts[0].replace(/^@/, "")) : null;
   } catch {
