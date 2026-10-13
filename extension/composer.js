@@ -25,38 +25,58 @@
   }
 
   const squash = (s) => s.replace(/\s+/g, " ").trim();
-  // Line breaks survive if the editor shows each paragraph (it may render blank lines as empty blocks).
-  const kept = (el, text) => {
-    const shown = el.innerText.replace(/ /g, " ");
-    const lines = text.split("\n").filter((l) => l.trim());
-    return squash(shown) === squash(text) && shown.split("\n").filter((l) => l.trim()).length >= lines.length;
-  };
+  const shownText = (el) => (el.innerText || el.textContent || "").replace(/ /g, " ");
+  const hasText = (el, text) => squash(shownText(el)) === squash(text);
+  // Paragraphs survived if the editor shows each non-empty line on its own line.
+  const kept = (el, text) =>
+    hasText(el, text) && shownText(el).split("\n").filter((l) => l.trim()).length >= text.split("\n").filter((l) => l.trim()).length;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const log = (...a) => console.info("[Outbound OS]", ...a);
 
+  function clear(el) {
+    el.focus();
+    document.execCommand("selectAll", false);
+    document.execCommand("delete", false);
+  }
+
+  /**
+   * Put the draft in the message box with its paragraphs. Rich editors
+   * (Instagram's) drop "\n" from insertText, so try, in order: a paste through
+   * the editor's own paste handling, then line by line with line breaks
+   * (Shift+Enter style, never Enter/Send), then the plain one-block insert so
+   * the box is always filled.
+   */
   async function fill(el, text) {
     el.focus();
     if (el.tagName === "TEXTAREA") {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
       setter.call(el, text);
       el.dispatchEvent(new Event("input", { bubbles: true }));
-      return;
+      return "textarea";
     }
-    // Rich editors (Instagram's) drop "\n" from insertText but keep paragraphs from a paste,
-    // so hand the text over as a paste through the editor's own paste handling.
-    document.execCommand("selectAll", false);
-    const data = new DataTransfer();
-    data.setData("text/plain", text);
-    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-    await new Promise((r) => setTimeout(r, 150));
-    if (kept(el, text)) return;
-    // Fallback: type line by line with a line break between lines (like Shift+Enter, never Enter/Send).
-    el.focus();
-    document.execCommand("selectAll", false);
-    document.execCommand("delete", false);
-    const lines = text.split("\n");
-    lines.forEach((line, i) => {
-      if (line) document.execCommand("insertText", false, line);
-      if (i < lines.length - 1) document.execCommand("insertLineBreak", false);
-    });
+    try {
+      clear(el);
+      const data = new DataTransfer();
+      data.setData("text/plain", text);
+      el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+      await sleep(250);
+      if (kept(el, text)) return "paste";
+
+      clear(el);
+      await sleep(50);
+      const lines = text.split("\n");
+      lines.forEach((line, i) => {
+        if (line) document.execCommand("insertText", false, line);
+        if (i < lines.length - 1) document.execCommand("insertLineBreak", false);
+      });
+      await sleep(150);
+      if (hasText(el, text)) return kept(el, text) ? "lines" : "lines (no breaks)";
+    } catch (e) {
+      log("paragraph fill failed, using plain fill", e);
+    }
+    clear(el);
+    document.execCommand("insertText", false, text);
+    return "plain";
   }
 
   function showBar(state, pending) {
@@ -72,8 +92,9 @@
     bar.innerHTML = `<span style="opacity:.9">${msg}</span>`;
     if (state === "filled" || state === "waiting") {
       const sent = button("Mark sent & next", "#e2496f", () => send("MARK_SENT_AND_NEXT"));
+      const again = button("Fill again", "transparent", () => { filledFor = null; tick(); });
       const skip = button("Skip", "transparent", () => send("SKIP_AND_NEXT"));
-      bar.append(sent, skip);
+      bar.append(sent, again, skip);
     }
   }
 
@@ -108,7 +129,7 @@
       const el = findComposer();
       if (el && (location.pathname.startsWith("/direct") || location.pathname.startsWith("/messages"))) {
         filledFor = pending.id;
-        fill(el, pending.text).then(() => showBar("filled", pending));
+        fill(el, pending.text).then((how) => { log(`filled (${how})`); showBar("filled", pending); });
       } else {
         showBar("waiting", pending);
       }

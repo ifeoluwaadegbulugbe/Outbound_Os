@@ -21,6 +21,14 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 
 type Dlg = null | "campaign" | "status" | "dnc" | "generate";
 
+const DRAFT_CHANNELS = [
+  { key: "email", label: "Email", icon: Mail },
+  { key: "instagram", label: "Instagram DM", icon: AtSign },
+  { key: "tiktok", label: "TikTok DM", icon: Music2 },
+  { key: "whatsapp", label: "WhatsApp", icon: Phone },
+  { key: "auto", label: "Best available per business", icon: MessageSquarePlus },
+];
+
 export function ProspectTable({
   rows, total, params, campaigns, canEdit, sort, dir,
 }: { rows: ProspectRow[]; total: number; params: Record<string, string>; campaigns: { id: string; name: string }[]; canEdit: boolean; sort: string; dir: "asc" | "desc" }) {
@@ -35,6 +43,7 @@ export function ProspectTable({
   const [dncNote, setDncNote] = useState("");
   const [genChannel, setGenChannel] = useState("email");
   const openGenerate = (channel: string) => { setGenChannel(channel); setDlg("generate"); };
+  const [draftMenu, setDraftMenu] = useState(false);
 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const count = allMatching ? total : selected.size;
@@ -83,9 +92,21 @@ export function ProspectTable({
             </button>
           ) : null}
           <div className="ml-auto flex flex-wrap gap-1.5">
-            <Button size="xs" variant="primary" onClick={() => openGenerate("email")}><MessageSquarePlus /> Draft emails</Button>
-            <Button size="xs" variant="primary" onClick={() => openGenerate("instagram")}><AtSign /> Draft Instagram DMs</Button>
-            <Button size="xs" onClick={() => openGenerate("tiktok")}><Music2 /> Draft TikTok DMs</Button>
+            <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDraftMenu(false); }}>
+              <Button size="xs" variant="primary" aria-haspopup="menu" aria-expanded={draftMenu} onClick={() => setDraftMenu((o) => !o)}>
+                <MessageSquarePlus /> Draft messages <ChevronDown />
+              </Button>
+              {draftMenu ? (
+                <div role="menu" className="absolute left-0 top-full z-20 mt-1 min-w-[190px] rounded-md border border-border bg-surface p-1 shadow-lg">
+                  {DRAFT_CHANNELS.map((c) => (
+                    <button key={c.key} role="menuitem" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12.5px] hover:bg-surface-2"
+                      onClick={() => { setDraftMenu(false); openGenerate(c.key); }}>
+                      <c.icon className="size-3.5 text-fg-3" /> {c.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <Button size="xs" onClick={() => run(() => findEmailsAction(selection()))} loading={pending && dlg === null}><MailSearch /> Find emails</Button>
             <Button size="xs" onClick={() => run(() => verifyEmailsAction(selection()))} loading={pending && dlg === null}><MailCheck /> Verify</Button>
             <Button size="xs" onClick={() => setDlg("campaign")} disabled={!campaigns.length}><Target /> Add to campaign</Button>
