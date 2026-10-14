@@ -231,3 +231,19 @@ describe("TikTok handles in Instagram bios", () => {
     expect(tiktokFromBio("Bookings: @mybookingpage on IG")).toBeNull();
   });
 });
+
+describe("Instagram snowball filter", () => {
+  it("keeps small service businesses in a target country, skips the rest", async () => {
+    const { judgeProfile, locateProfile, categoryFromProfile } = await import("@/server/collection/instagram-snowball");
+    const keep = judgeProfile({ name: "Glam by Kemi", username: "glambykemi_mua", bio: "Bridal makeup artist 💄 Lekki, Lagos · DM for bookings", website: null, followers: 4200 });
+    expect(keep).toMatchObject({ keep: true, category: "makeup_artist", country: "NG", state: "Lagos" });
+    expect(judgeProfile({ name: "Tolu", username: "tolu_adeyemi", bio: "Lover of hair and good food. Abuja", website: null, followers: 900 })).toMatchObject({ keep: false, reason: "not one of the service categories" });
+    expect(judgeProfile({ name: "Braids by Ada", username: "braidsbyada", bio: "Knotless braids, home service", website: null, followers: 800 })).toMatchObject({ keep: false, reason: "location not stated" });
+    expect(judgeProfile({ name: "Big Glam Studio", username: "bigglamstudio", bio: "Makeup · Lagos", website: null, followers: 450_000 })).toMatchObject({ keep: false });
+    expect(judgeProfile({ name: "WhatsApp", username: "whatsapp", bio: null, website: null, followers: null })).toMatchObject({ keep: false, reason: "platform account" });
+    expect(categoryFromProfile({ name: "Shots by Dayo", username: "shotsbydayo", bio: "Wedding photography · Ibadan" })).toBe("photographer");
+    expect(locateProfile("Cakes & small chops · Port Harcourt")).toMatchObject({ country: "NG", state: "Rivers" });
+    expect(locateProfile("Nail tech in Accra 🇬🇭")).toMatchObject({ country: "GH" });
+    expect(locateProfile("Call 08031234567")).toMatchObject({ country: "NG" });
+  });
+});

@@ -2,7 +2,7 @@ import type { SourceAdapter, NormalizedProspect, DiscoveryParams, DiscoveryConte
 import { integrationFetch, IntegrationError, sleep } from "./http";
 import { sql } from "../db";
 import { decryptSecret } from "../auth/crypto";
-import { extractSignals, normalizeHandle } from "../domain/normalize";
+import { extractSignals, normalizeHandle, PLATFORM_HANDLES } from "../domain/normalize";
 import { suggestHashtags } from "../domain/taxonomy";
 
 /**
@@ -71,6 +71,7 @@ export async function graph<T>(ctx: DiscoveryContext, cfg: IgConfig, path: strin
 }
 
 async function addCandidates(ctx: DiscoveryContext, handles: string[], foundVia: string, depth: number) {
+  handles = handles.filter((h) => !PLATFORM_HANDLES.has(h.toLowerCase()));
   if (!handles.length) return;
   await ctx.ws(async (q) => {
     for (const h of handles) {
@@ -165,7 +166,7 @@ export const instagramAdapter: SourceAdapter = {
     while (looked < params.limit) {
       const batch = await ctx.ws((q) => q.many<{ id: string; handle: string; depth: number }>(sql`
         select id, handle, depth from discovery_candidates where platform = 'instagram' and status = 'pending' and attempts < 3
-        order by depth, created_at limit 20`));
+        order by (depth = 0), created_at limit 20`)); // new mentions before the next seed, so finds show up early
       if (!batch.length) break;
       for (const c of batch) {
         if (looked >= params.limit) break;
@@ -186,6 +187,11 @@ export const instagramAdapter: SourceAdapter = {
           }
           yield p;
         } catch (e) {
+          // Not allowed to call Business Discovery at all (missing permission, bad token): every lookup
+          // would fail the same way, so stop instead of marking candidates "not found".
+          if (e instanceof Error && /\(#(10|190|200)\)/.test(e.message)) {
+            throw new IntegrationError("Meta refused the lookup (missing permission or invalid token). Check instagram_manage_insights in Integrations → Instagram.", 403, false);
+          }
           // Graph returns 400 for personal/non-existent accounts.
           const notFound = e instanceof IntegrationError && e.status === 400;
           await ctx.ws((q) => q.exec(sql`update discovery_candidates set status = ${notFound ? "not_found" : "error"}, attempts = attempts + 1,
